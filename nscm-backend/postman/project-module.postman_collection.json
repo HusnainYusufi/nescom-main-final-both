@@ -1,0 +1,87 @@
+{
+  "info": {
+    "_postman_id": "6e6f16e5-6f35-4c63-8a74-fd3533b1a47a",
+    "name": "NSCM Project Module",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Project creation flow with categories, assemblies, structures, and projects."
+  },
+  "item": [
+    {
+      "name": "Project Category - Add",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/project-category/add", "host": ["{{baseUrl}}"], "path": ["project-category", "add"] },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Healthcare\",\n  \"description\": \"Healthcare projects\"\n}"
+        }
+      }
+    },
+    {
+      "name": "Project Category - Get All",
+      "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/project-category/all", "host": ["{{baseUrl}}"], "path": ["project-category", "all"] } }
+    },
+    {
+      "name": "Assembly - Add",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/assembly/add", "host": ["{{baseUrl}}"], "path": ["assembly", "add"] },
+        "body": { "mode": "raw", "raw": "{\n  \"name\": \"HVAC Assembly\",\n  \"type\": \"assembly\",\n  \"notes\": \"Cooling package\"\n}" }
+      }
+    },
+    {
+      "name": "Assembly - Add Sub Assembly",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/assembly/add", "host": ["{{baseUrl}}"], "path": ["assembly", "add"] },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"HVAC Ducting\",\n  \"type\": \"sub-assembly\",\n  \"parentAssembly\": \"{{assemblyId}}\",\n  \"notes\": \"Ducting package\"\n}"
+        }
+      }
+    },
+    {
+      "name": "Assembly - Get All",
+      "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/assembly/all", "host": ["{{baseUrl}}"], "path": ["assembly", "all"] } }
+    },
+    {
+      "name": "Structure - Add",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/structure/add", "host": ["{{baseUrl}}"], "path": ["structure", "add"] },
+        "body": { "mode": "raw", "raw": "{\n  \"name\": \"Steel Frame\",\n  \"materialSpecs\": \"Grade A steel\",\n  \"notes\": \"Primary support structure\"\n}" }
+      }
+    },
+    {
+      "name": "Structure - Get All",
+      "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/structure/all", "host": ["{{baseUrl}}"], "path": ["structure", "all"] } }
+    },
+    {
+      "name": "Project - Add",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/project/add", "host": ["{{baseUrl}}"], "path": ["project", "add"] },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Cardiology Wing\",\n  \"code\": \"PRJ-001\",\n  \"category\": \"{{categoryId}}\",\n  \"type\": \"special\",\n  \"shortDescription\": \"Wing expansion project\",\n  \"sets\": [\n    {\n      \"name\": \"Mechanical Set\",\n      \"description\": \"Mechanical components\",\n      \"materialSpecs\": \"Standard\",\n      \"assemblies\": [\"{{assemblyId}}\", \"{{subAssemblyId}}\"]\n    }\n  ],\n  \"structures\": [\"{{structureId}}\"]\n}"
+        }
+      }
+    },
+    {
+      "name": "Project - Get All",
+      "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/project/all", "host": ["{{baseUrl}}"], "path": ["project", "all"] } }
+    }
+  ],
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000" },
+    { "key": "categoryId", "value": "" },
+    { "key": "assemblyId", "value": "" },
+    { "key": "subAssemblyId", "value": "" },
+    { "key": "structureId", "value": "" }
+  ]
+}

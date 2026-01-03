@@ -1,0 +1,40 @@
+services:
+  pmc:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      # If you are putting a reverse proxy in front (same origin) you can set:
+      # args:
+      #   VITE_API_BASE_URL: /api
+    image: pmc-app:latest
+    environment:
+      - PORT=3254
+      - FRONTEND_PORT=4173
+      - MONGO_DATA=/data/db
+      - JWT_SECRET_KEY=bPeShVmYq3t6w9zCFJNcRfTjWnZr4u7xADGKaPdSgVkXp2s5v8yBE
+      # - MONGO_URI=mongodb://admin:hJe9%40FYR@84.247.136.33:27099/admin
+      # - MONGO_URI=mongodb://localhost:27017/legend-delivery
+      - MONGO_URI=mongodb://127.0.0.1:27017/pmc-backend
+      - HOST=mail.eduportal.pk
+      - MAIL_PORT=465
+      - MAIL_USER=husnainyusufi@eduportal.pk
+      - MAIL_PASSWORD=husnain15sep23
+      - GMAIL_USER=husnainyusufi84@gmail.com
+      - GMAIL_PASSWORD=hJe9@FYR
+      - DEVICE_API_KEY=Ne4YEDfhlrY9zoTxgWnu2f5DviYQj4MB
+      - REDIS_URL=redis://127.0.0.1:6379
+      - FRONTEND_URL=https://portal-legend.devmedialm.com
+      - LABEL_QR_MODE=ORDER_NO
+      - SEED_ADMIN_EMAIL=classified@example.local
+      - SEED_ADMIN_USERNAME=classified-admin
+      - SEED_ADMIN_PASSWORD=admin123
+    ports:
+      - "4173:4173"
+      - "3254:3254"
+    volumes:
+      - mongo-data:/data/db
+    restart: unless-stopped
+
+volumes:
+  mongo-data:
+

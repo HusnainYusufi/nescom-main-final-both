@@ -1,0 +1,14 @@
+<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Assistant avatar">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3b82f6" />
+      <stop offset="100%" stop-color="#0ea5e9" />
+    </linearGradient>
+  </defs>
+  <circle cx="64" cy="64" r="62" fill="url(#grad)" stroke="#0f172a" stroke-width="4" />
+  <rect x="32" y="44" width="64" height="50" rx="12" fill="#0f172a" />
+  <rect x="42" y="54" width="44" height="18" rx="6" fill="#e2e8f0" />
+  <circle cx="52" cy="100" r="6" fill="#e2e8f0" />
+  <circle cx="76" cy="100" r="6" fill="#e2e8f0" />
+  <path d="M60 80 h8" stroke="#e2e8f0" stroke-width="6" stroke-linecap="round" />
+</svg>

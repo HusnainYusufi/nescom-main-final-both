@@ -1,0 +1,7 @@
+# Local bundles / exports (can be huge)
+offline-bundle/
+*.tar
+*.tar.gz
+*.tgz
+
+

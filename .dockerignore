@@ -1,0 +1,14 @@
+# Prevent host artifacts from being copied into the image
+.git
+**/node_modules
+**/dist
+**/.cache
+**/.DS_Store
+nscm-backend/mongo-data
+logs
+*.log
+offline-bundle
+*.tar
+*.tar.gz
+*.tgz
+
