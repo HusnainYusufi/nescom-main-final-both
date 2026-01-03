@@ -9,6 +9,10 @@ class ProjectRepository {
     return await Project.findByIdAndUpdate(id, update, { new: true }).exec();
   }
 
+  static async getById(id) {
+    return await Project.findById(id).exec();
+  }
+
   static async getAll() {
     return await Project.find({})
       .populate('category')

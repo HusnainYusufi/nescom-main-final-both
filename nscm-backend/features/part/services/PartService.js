@@ -6,6 +6,9 @@ class PartService {
       if (!data?.project) {
         return { status: 400, message: 'Project is required', result: null }
       }
+      if (!data?.assembly) {
+        return { status: 400, message: 'Assembly is required', result: null }
+      }
       if (!data?.name || !data?.code) {
         return { status: 400, message: 'Name and code are required', result: null }
       }
@@ -32,4 +35,3 @@ class PartService {
 }
 
 module.exports = PartService
-

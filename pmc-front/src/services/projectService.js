@@ -18,6 +18,14 @@ const projectService = {
     return data.result
   },
 
+  update: async (projectId, payload) => {
+    const { data } = await api.put(`/project/${projectId}`, payload)
+    if (!data?.result) {
+      throw new Error(data?.message || 'Failed to update project')
+    }
+    return data.result
+  },
+
   updateStatus: async (projectId, status) => {
     const { data } = await api.put(`/project/${projectId}/status`, { status })
     if (!data?.result) {

@@ -10,9 +10,12 @@ class IssueRepository {
   }
 
   static async getAll(filters = {}) {
-    return IssueModel.find(filters).populate('project', 'name code')
+    return IssueModel.find(filters)
+      .populate('project')
+      .populate('structure')
+      .populate('assembly')
+      .populate('part')
   }
 }
 
 module.exports = IssueRepository
-

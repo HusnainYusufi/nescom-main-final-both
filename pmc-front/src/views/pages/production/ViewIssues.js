@@ -27,6 +27,7 @@ import { cilCloudDownload } from '@coreui/icons'
 import CIcon from '@coreui/icons-react'
 import issueService from '../../../services/issueService'
 import projectService from '../../../services/projectService'
+import partService from '../../../services/partService'
 
 const ViewIssues = () => {
   const [search, setSearch] = useState('')
@@ -35,6 +36,10 @@ const ViewIssues = () => {
   const initialForm = {
     title: '',
     project: '',
+    set: '',
+    structure: '',
+    assembly: '',
+    part: '',
     severity: 'Medium',
     status: 'Open',
     assignedTo: '',
@@ -46,6 +51,9 @@ const ViewIssues = () => {
   const [projects, setProjects] = useState([])
   const [projectsLoading, setProjectsLoading] = useState(false)
   const [projectsError, setProjectsError] = useState(null)
+  const [partsOptions, setPartsOptions] = useState([])
+  const [partsLoading, setPartsLoading] = useState(false)
+  const [partsError, setPartsError] = useState(null)
   const [showModal, setShowModal] = useState(false)
   const [form, setForm] = useState(initialForm)
   const [creating, setCreating] = useState(false)
@@ -53,12 +61,21 @@ const ViewIssues = () => {
 
   const normalizeIssue = useCallback(
     (i, idx = 0) => ({
-          id: i._id || i.id || `issue-${idx + 1}`,
-          project: typeof i.project === 'object' ? i.project?.name : i.project || '—',
-          severity: i.severity || 'Medium',
-          assigned: i.assignedTo || i.assigned || '—',
-          status: i.status || 'Open',
-          remarks: i.remarks || i.description || '—',
+      id: i._id || i.id || `issue-${idx + 1}`,
+      project: typeof i.project === 'object' ? i.project?.name : i.project || '—',
+      target:
+        i.partName ||
+        i.assemblyName ||
+        i.structureName ||
+        i.setName ||
+        i.part?.name ||
+        i.assembly?.name ||
+        i.structure?.name ||
+        '—',
+      severity: i.severity || 'Medium',
+      assigned: i.assignedTo || i.assigned || '—',
+      status: i.status || 'Open',
+      remarks: i.remarks || i.description || '—',
     }),
     [],
   )
@@ -98,7 +115,24 @@ const ViewIssues = () => {
   }, [loadIssues, loadProjects])
 
   const handleFormChange = (field, value) => {
-    setForm((prev) => ({ ...prev, [field]: value }))
+    setForm((prev) => {
+      const next = { ...prev, [field]: value }
+      if (field === 'project') {
+        next.set = ''
+        next.structure = ''
+        next.assembly = ''
+        next.part = ''
+      }
+      if (field === 'set') {
+        next.structure = ''
+        next.assembly = ''
+        next.part = ''
+      }
+      if (field === 'structure' || field === 'assembly') {
+        next.part = ''
+      }
+      return next
+    })
   }
 
   const closeModal = () => {
@@ -115,11 +149,19 @@ const ViewIssues = () => {
       setCreateError('Project and title are required.')
       return
     }
+    if (!form.set && !form.structure && !form.assembly && !form.part) {
+      setCreateError('Select a set, structure, assembly, or part for this issue.')
+      return
+    }
 
     setCreating(true)
     try {
       await issueService.add({
         project: form.project,
+        set: form.set || undefined,
+        structure: form.structure || undefined,
+        assembly: form.assembly || undefined,
+        part: form.part || undefined,
         title: form.title.trim(),
         severity: form.severity,
         status: form.status,
@@ -147,10 +189,62 @@ const ViewIssues = () => {
   const totalPages = Math.ceil(filtered.length / itemsPerPage)
   const currentData = filtered.slice((page - 1) * itemsPerPage, page * itemsPerPage)
 
+  const selectedProject = useMemo(
+    () => projects.find((p) => (p._id || p.id) === form.project),
+    [projects, form.project],
+  )
+  const availableSets = useMemo(() => selectedProject?.sets || [], [selectedProject])
+  const selectedSet = useMemo(() => {
+    return availableSets.find((set) => (set._id || set.id || set.name) === form.set) || null
+  }, [availableSets, form.set])
+  const availableStructures = useMemo(() => selectedSet?.structures || [], [selectedSet])
+  const selectedStructure = useMemo(
+    () =>
+      availableStructures.find((structure) => (structure._id || structure.id) === form.structure) ||
+      null,
+    [availableStructures, form.structure],
+  )
+  const availableAssemblies = useMemo(() => {
+    const assemblies = selectedSet?.assemblies || []
+    if (!selectedStructure?.assemblies?.length) return assemblies
+    const allowed = new Set(selectedStructure.assemblies.map((id) => String(id._id || id)))
+    return assemblies.filter((assembly) => allowed.has(String(assembly._id || assembly.id || assembly)))
+  }, [selectedSet, selectedStructure])
+
+  useEffect(() => {
+    const loadParts = async () => {
+      if (!form.assembly) {
+        setPartsOptions([])
+        setPartsError(null)
+        return
+      }
+      setPartsLoading(true)
+      setPartsError(null)
+      try {
+        const parts = await partService.getAll({ assembly: form.assembly })
+        setPartsOptions(parts || [])
+      } catch (err) {
+        setPartsOptions([])
+        setPartsError(err?.message || 'Unable to load parts.')
+      } finally {
+        setPartsLoading(false)
+      }
+    }
+    loadParts()
+  }, [form.assembly])
+
   const exportCSV = () => {
     const csv = [
-      ['ID', 'Project', 'Severity', 'Assigned Engineer', 'Status', 'Remarks'],
-      ...filtered.map((i) => [i.id, i.project, i.severity, i.assigned, i.status, i.remarks]),
+      ['ID', 'Project', 'Target', 'Severity', 'Assigned Engineer', 'Status', 'Remarks'],
+      ...filtered.map((i) => [
+        i.id,
+        i.project,
+        i.target,
+        i.severity,
+        i.assigned,
+        i.status,
+        i.remarks,
+      ]),
     ]
       .map((e) => e.join(','))
       .join('\n')
@@ -190,6 +284,82 @@ const ViewIssues = () => {
               </CFormSelect>
               {projectsLoading && <div className="small text-muted mt-1">Loading projects...</div>}
               {projectsError && <div className="text-danger small mt-1">{projectsError}</div>}
+            </div>
+            <div className="d-flex gap-3 flex-wrap">
+              <div className="flex-fill">
+                <CFormLabel className="small fw-semibold">Set</CFormLabel>
+                <CFormSelect
+                  size="sm"
+                  value={form.set}
+                  onChange={(e) => handleFormChange('set', e.target.value)}
+                  disabled={!availableSets.length || creating}
+                >
+                  <option value="">{availableSets.length ? 'Select set' : 'No sets found'}</option>
+                  {availableSets.map((set, index) => (
+                    <option key={set._id || set.id || index} value={set._id || set.id || set.name}>
+                      {set.name || `Set ${index + 1}`}
+                    </option>
+                  ))}
+                </CFormSelect>
+              </div>
+              <div className="flex-fill">
+                <CFormLabel className="small fw-semibold">Structure</CFormLabel>
+                <CFormSelect
+                  size="sm"
+                  value={form.structure}
+                  onChange={(e) => handleFormChange('structure', e.target.value)}
+                  disabled={!availableStructures.length || creating}
+                >
+                  <option value="">
+                    {availableStructures.length ? 'Select structure' : 'No structures found'}
+                  </option>
+                  {availableStructures.map((structure, index) => (
+                    <option key={structure._id || structure.id || index} value={structure._id || structure.id}>
+                      {structure.name || `Structure ${index + 1}`}
+                    </option>
+                  ))}
+                </CFormSelect>
+              </div>
+            </div>
+            <div className="d-flex gap-3 flex-wrap">
+              <div className="flex-fill">
+                <CFormLabel className="small fw-semibold">Assembly</CFormLabel>
+                <CFormSelect
+                  size="sm"
+                  value={form.assembly}
+                  onChange={(e) => handleFormChange('assembly', e.target.value)}
+                  disabled={!availableAssemblies.length || creating}
+                >
+                  <option value="">
+                    {availableAssemblies.length ? 'Select assembly' : 'No assemblies found'}
+                  </option>
+                  {availableAssemblies.map((assembly, index) => (
+                    <option key={assembly._id || assembly.id || index} value={assembly._id || assembly.id}>
+                      {assembly.name || `Assembly ${index + 1}`}
+                    </option>
+                  ))}
+                </CFormSelect>
+              </div>
+              <div className="flex-fill">
+                <CFormLabel className="small fw-semibold">Part</CFormLabel>
+                <CFormSelect
+                  size="sm"
+                  value={form.part}
+                  onChange={(e) => handleFormChange('part', e.target.value)}
+                  disabled={!form.assembly || partsLoading || creating}
+                >
+                  <option value="">
+                    {form.assembly ? 'Select part' : 'Select an assembly first'}
+                  </option>
+                  {partsOptions.map((part) => (
+                    <option key={part._id || part.id} value={part._id || part.id}>
+                      {part.name || part.code || part.id}
+                    </option>
+                  ))}
+                </CFormSelect>
+                {partsLoading && <div className="small text-muted mt-1">Loading parts...</div>}
+                {partsError && <div className="text-danger small mt-1">{partsError}</div>}
+              </div>
             </div>
             <div>
               <CFormLabel className="small fw-semibold">Title</CFormLabel>
@@ -309,6 +479,7 @@ const ViewIssues = () => {
                 <CTableRow>
                   <CTableHeaderCell>ID</CTableHeaderCell>
                   <CTableHeaderCell>Project</CTableHeaderCell>
+                  <CTableHeaderCell>Target</CTableHeaderCell>
                   <CTableHeaderCell>Severity</CTableHeaderCell>
                   <CTableHeaderCell>Assigned</CTableHeaderCell>
                   <CTableHeaderCell>Status</CTableHeaderCell>
@@ -318,7 +489,7 @@ const ViewIssues = () => {
               <CTableBody>
                 {currentData.length === 0 ? (
                   <CTableRow>
-                    <CTableDataCell colSpan={6} className="text-center text-body-secondary py-4">
+                    <CTableDataCell colSpan={7} className="text-center text-body-secondary py-4">
                       No issues found.
                     </CTableDataCell>
                   </CTableRow>
@@ -327,6 +498,7 @@ const ViewIssues = () => {
                     <CTableRow key={i.id}>
                       <CTableDataCell>{i.id}</CTableDataCell>
                       <CTableDataCell>{i.project}</CTableDataCell>
+                      <CTableDataCell>{i.target}</CTableDataCell>
                       <CTableDataCell>
                         <span
                           className={`badge bg-${
