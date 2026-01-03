@@ -793,6 +793,17 @@ const ProductionTreeView = () => {
           variant="outline"
           onClick={(event) => {
             event.stopPropagation()
+            navigate(`/production/create-project-wizard?edit=${project.id}`)
+          }}
+        >
+          Edit
+        </CButton>
+        <CButton
+          color="light"
+          size="sm"
+          variant="outline"
+          onClick={(event) => {
+            event.stopPropagation()
             setExpandedProjects((prev) => (prev === project.id ? null : project.id))
           }}
         >

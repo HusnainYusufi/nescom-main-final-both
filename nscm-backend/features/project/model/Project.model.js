@@ -7,8 +7,7 @@ const SetSchema = new mongoose.Schema(
     materialSpecs: { type: String },
     assemblies: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Assembly' }],
     structures: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Structure' }]
-  },
-  { _id: false }
+  }
 );
 
 const ProjectSchema = new mongoose.Schema(

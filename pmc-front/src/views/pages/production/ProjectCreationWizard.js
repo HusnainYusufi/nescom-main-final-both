@@ -1,7 +1,7 @@
 // src/views/pages/production/ProjectCreationWizard.js
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   CAlert,
   CBadge,
@@ -33,6 +33,7 @@ import structureService from '../../../services/structureService'
 const ProjectCreationWizard = () => {
   const dispatch = useDispatch()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const existingProjects = useSelector((state) => state.projects)
   const [categories, setCategories] = useState([])
   const [categoryInput, setCategoryInput] = useState('')
@@ -96,6 +97,7 @@ const ProjectCreationWizard = () => {
   const [sets, setSets] = useState([
     {
       id: 'set-1',
+      backendId: null,
       name: 'Set 1',
       description: 'Default starter set',
       structures: [],
@@ -108,6 +110,8 @@ const ProjectCreationWizard = () => {
   const [errors, setErrors] = useState({})
   const [createdProject, setCreatedProject] = useState(null)
   const [showCreateConfirmation, setShowCreateConfirmation] = useState(false)
+  const [editingProjectId, setEditingProjectId] = useState('')
+  const isEditing = Boolean(editingProjectId)
 
   useEffect(() => {
     const loadInitial = async () => {
@@ -133,6 +137,18 @@ const ProjectCreationWizard = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  useEffect(() => {
+    const editId = searchParams.get('edit')
+    setEditingProjectId(editId || '')
+  }, [searchParams])
+
+  const formatAssemblyType = useCallback((type) => {
+    const normalized = (type || '').toLowerCase()
+    if (normalized === 'sub-assembly' || normalized === 'sub assembly') return 'Sub-assembly'
+    if (normalized === 'kit') return 'Kit'
+    return 'Assembly'
+  }, [])
+
   const progressValue = Math.round(((currentStep + 1) / steps.length) * 100)
 
   const stepStates = useMemo(
@@ -152,6 +168,67 @@ const ProjectCreationWizard = () => {
       return additions.length ? [...prev, ...additions] : prev
     })
   }, [assemblyLibrary])
+
+  useEffect(() => {
+    if (!editingProjectId) return
+    const sourceProjects = backendProjects.length ? backendProjects : existingProjects
+    const project = sourceProjects.find(
+      (item) => (item._id || item.id) === editingProjectId,
+    )
+    if (!project) return
+
+    const categoryId =
+      typeof project.category === 'object' ? project.category?._id : project.category
+    const categoryLabel =
+      typeof project.category === 'object'
+        ? project.category?.name || project.category?.title || ''
+        : project.category || ''
+
+    setProjectForm({
+      name: project.name || '',
+      code: project.code || '',
+      category: categoryId || '',
+      projectType: project.type || '',
+      visibility: true,
+      description: project.shortDescription || project.description || '',
+    })
+    setCategoryInput(categoryLabel)
+
+    const normalizedSets =
+      project.sets?.map((set, setIdx) => ({
+        id: set._id || set.id || `set-${setIdx + 1}`,
+        backendId: set._id || set.id || null,
+        name: set.name || `Set ${setIdx + 1}`,
+        description: set.description || '',
+        material: set.materialSpecs || '',
+        structures:
+          set.structures?.map((structure, sidx) => ({
+            id: structure._id || structure.id || `st-${setIdx + 1}-${sidx + 1}`,
+            name: structure.name || `Structure ${sidx + 1}`,
+            material: structure.materialSpecs || '',
+            description: structure.notes || '',
+            assemblyIds: (structure.assemblies || []).map(
+              (assembly) => assembly._id || assembly.id || assembly,
+            ),
+            backendId: structure._id || structure.id || null,
+          })) || [],
+        assemblies:
+          set.assemblies?.map((assembly, aidx) => ({
+            id: assembly._id || assembly.id || `as-${setIdx + 1}-${aidx + 1}`,
+            name: assembly?.name || `Assembly ${aidx + 1}`,
+            type: formatAssemblyType(assembly?.type),
+            description: assembly?.notes || assembly?.description || '',
+            source: 'Existing',
+            saved: true,
+            backendId: assembly?._id || assembly?.id || null,
+          })) || [],
+      })) || []
+
+    if (normalizedSets.length) {
+      setSets(normalizedSets)
+    }
+    setCurrentStep(0)
+  }, [backendProjects, editingProjectId, existingProjects, formatAssemblyType])
 
   const updateSetField = (setId, field, value) => {
     setSets((prev) => prev.map((set) => (set.id === setId ? { ...set, [field]: value } : set)))
@@ -202,6 +279,7 @@ const ProjectCreationWizard = () => {
       ...prev,
       {
         id: newId,
+        backendId: null,
         name: `Set ${prev.length + 1}`,
         description: '',
         structures: [],
@@ -223,6 +301,7 @@ const ProjectCreationWizard = () => {
           const formAsm = formSet.assemblies?.[aidx] || {}
           return {
             ...asm,
+            backendId: asm._id || asm.id || formAsm.backendId || null,
             name: asm.name || formAsm.name || `Assembly ${aidx + 1}`,
             type: asm.type || formAsm.type || 'assembly',
             status: asm.status || 'Draft',
@@ -232,6 +311,8 @@ const ProjectCreationWizard = () => {
           (set.structures && set.structures.length ? set.structures : formSet.structures) || []
         return {
           ...set,
+          id: set._id || set.id || formSet.id,
+          backendId: set._id || set.id || formSet.backendId || null,
           name: set.name || formSet.name,
           description: set.description || formSet.description,
           structures: mergedStructures,
@@ -258,6 +339,7 @@ const ProjectCreationWizard = () => {
                   id: `st-${Date.now()}`,
                   name: `Structure ${set.structures.length + 1}`,
                   material: '',
+                  assemblyIds: [],
                 },
               ],
             }
@@ -281,6 +363,7 @@ const ProjectCreationWizard = () => {
                   description: '',
                   source: 'Local',
                   saved: false,
+                  backendId: null,
                 },
               ],
             }
@@ -347,6 +430,7 @@ const ProjectCreationWizard = () => {
                   description: template.description || '',
                   source: template.source || 'Inventory',
                   saved: true,
+                  backendId: null,
                 },
               ],
             }
@@ -388,6 +472,7 @@ const ProjectCreationWizard = () => {
 
     const importedSets = templateProject.sets.map((set, index) => ({
       id: `import-${Date.now()}-${index + 1}`,
+      backendId: null,
       name: set.name,
       description: `Imported from ${templateProject.name}`,
       structures: [],
@@ -450,6 +535,31 @@ const ProjectCreationWizard = () => {
         throw new Error('Category is required')
       }
 
+      // Create assemblies per set (reuse existing ids when editing)
+      const assemblyIdMap = {}
+      const assemblyLookup = new Map()
+      for (const set of sets) {
+        const ids = []
+        for (const assembly of set.assemblies || []) {
+          if (!assembly.name?.trim()) continue
+          let resolvedId = assembly.backendId || null
+          if (!resolvedId) {
+            const payload = {
+              name: assembly.name.trim(),
+              type: (assembly.type || 'assembly').toLowerCase(),
+              notes: assembly.description || '',
+            }
+            const created = await assemblyService.add(payload)
+            resolvedId = created?._id || null
+          }
+          if (resolvedId) {
+            ids.push(resolvedId)
+            assemblyLookup.set(assembly.id, resolvedId)
+          }
+        }
+        assemblyIdMap[set.id] = ids
+      }
+
       // Create structures per set
       const structureIdMap = {}
       const allStructureIds = []
@@ -457,35 +567,26 @@ const ProjectCreationWizard = () => {
         const ids = []
         for (const structure of set.structures || []) {
           if (!structure.name?.trim()) continue
-          const payload = {
-            name: structure.name.trim(),
-            materialSpecs: structure.material || '',
-            notes: structure.description || '',
+          let resolvedId = structure.backendId || null
+          if (!resolvedId) {
+            const linkedAssemblies = (structure.assemblyIds || [])
+              .map((assemblyId) => assemblyLookup.get(assemblyId))
+              .filter(Boolean)
+            const payload = {
+              name: structure.name.trim(),
+              materialSpecs: structure.material || '',
+              notes: structure.description || '',
+              assemblies: linkedAssemblies,
+            }
+            const created = await structureService.add(payload)
+            resolvedId = created?._id || null
           }
-          const created = await structureService.add(payload)
-          if (created?._id) {
-            ids.push(created._id)
-            allStructureIds.push(created._id)
+          if (resolvedId) {
+            ids.push(resolvedId)
+            allStructureIds.push(resolvedId)
           }
         }
         structureIdMap[set.id] = ids
-      }
-
-      // Create assemblies per set
-      const assemblyIdMap = {}
-      for (const set of sets) {
-        const ids = []
-        for (const assembly of set.assemblies || []) {
-          if (!assembly.name?.trim()) continue
-          const payload = {
-            name: assembly.name.trim(),
-            type: (assembly.type || 'assembly').toLowerCase(),
-            notes: assembly.description || '',
-          }
-          const created = await assemblyService.add(payload)
-          if (created?._id) ids.push(created._id)
-        }
-        assemblyIdMap[set.id] = ids
       }
 
       const payload = {
@@ -495,6 +596,7 @@ const ProjectCreationWizard = () => {
         type: (projectForm.projectType || '').toLowerCase(),
         shortDescription: projectForm.description,
         sets: sets.map((set) => ({
+          _id: set.backendId || undefined,
           name: set.name,
           description: set.description,
           materialSpecs: set.material || '',
@@ -505,11 +607,17 @@ const ProjectCreationWizard = () => {
         structures: allStructureIds,
       }
 
-      const created = await projectService.add(payload)
-      const enriched = mergeCreatedProjectWithForm(created)
-      dispatch({ type: 'addProject', project: enriched })
+      const saved = isEditing
+        ? await projectService.update(editingProjectId, payload)
+        : await projectService.add(payload)
+      const enriched = mergeCreatedProjectWithForm(saved)
+
+      if (isEditing) {
+        dispatch({ type: 'updateProject', projectId: enriched.id || enriched._id, changes: enriched })
+      } else {
+        dispatch({ type: 'addProject', project: enriched })
+      }
       setCreatedProject(enriched)
-      // Optionally refresh full list to get populated assemblies
       projectService
         .getAll()
         .then((list) => {
@@ -818,6 +926,29 @@ const ProjectCreationWizard = () => {
                                 )
                               }
                             />
+                            <CFormSelect
+                              label="Linked assemblies"
+                              multiple
+                              value={structure.assemblyIds || []}
+                              onChange={(event) => {
+                                const options = Array.from(event.target.selectedOptions).map(
+                                  (option) => option.value,
+                                )
+                                updateStructureField(set.id, structure.id, 'assemblyIds', options)
+                              }}
+                              className="mt-2"
+                            >
+                              {set.assemblies.length === 0 && (
+                                <option disabled value="">
+                                  Add assemblies to link them
+                                </option>
+                              )}
+                              {set.assemblies.map((assembly) => (
+                                <option key={assembly.id} value={assembly.id}>
+                                  {assembly.name || 'Assembly'}
+                                </option>
+                              ))}
+                            </CFormSelect>
                           </div>
                         </CCol>
                       ))}
@@ -1079,7 +1210,9 @@ const ProjectCreationWizard = () => {
     <CContainer fluid className="mt-4">
       <CModal alignment="center" visible={showCreateConfirmation} backdrop="static">
         <CModalHeader>
-          <CModalTitle className="fw-semibold">Project created</CModalTitle>
+          <CModalTitle className="fw-semibold">
+            {isEditing ? 'Project updated' : 'Project created'}
+          </CModalTitle>
         </CModalHeader>
         <CModalBody>
           <p className="mb-2">
@@ -1110,7 +1243,7 @@ const ProjectCreationWizard = () => {
             <CCardHeader className="wizard-card__header border-0 pb-0">
               <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
                 <div>
-                  <h4 className="mb-1">Create a project</h4>
+                  <h4 className="mb-1">{isEditing ? 'Update project' : 'Create a project'}</h4>
                   <p className="text-body-secondary mb-0">
                     Multi-step flow to add a project, sets, and reusable structures.
                   </p>
@@ -1183,7 +1316,13 @@ const ProjectCreationWizard = () => {
                       disabled={submitting}
                       onClick={handleSubmit}
                     >
-                      {submitting ? <CSpinner size="sm" /> : 'Create project'}
+                      {submitting ? (
+                        <CSpinner size="sm" />
+                      ) : isEditing ? (
+                        'Update project'
+                      ) : (
+                        'Create project'
+                      )}
                     </CButton>
                   ) : (
                     <CButton color="primary" type="button" onClick={() => goToStep(1)}>

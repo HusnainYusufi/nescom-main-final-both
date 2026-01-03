@@ -51,7 +51,7 @@ const ConfigurationParts = () => {
   const [configurations, setConfigurations] = useState({})
   const [projectsList, setProjectsList] = useState([])
   const [selectedProjectId, setSelectedProjectId] = useState('')
-  const [selectedSetId, setSelectedSetId] = useState('')
+  const [selectedAssemblyId, setSelectedAssemblyId] = useState('')
   const [selectedPartId, setSelectedPartId] = useState('')
   const [showAddModal, setShowAddModal] = useState(false)
   const [form, setForm] = useState({
@@ -67,8 +67,8 @@ const ConfigurationParts = () => {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
-  const availableSets = useMemo(
-    () => configurations[selectedProjectId]?.sets || [],
+  const availableAssemblies = useMemo(
+    () => configurations[selectedProjectId]?.assemblies || [],
     [configurations, selectedProjectId],
   )
 
@@ -96,38 +96,43 @@ const ConfigurationParts = () => {
         allProjects.forEach((p) => {
           const projectId = p.id || p._id
           if (!projectId) return
-          grouped[projectId] = grouped[projectId] || { sets: [] }
+          grouped[projectId] = grouped[projectId] || { assemblies: [] }
           if (Array.isArray(p.sets)) {
-            p.sets.forEach((set, idx) => {
-              const sid = set._id || set.id || `${projectId}-set-${idx + 1}`
-              if (!grouped[projectId].sets.find((s) => s.id === sid)) {
-                grouped[projectId].sets.push({
-                  id: sid,
-                  name: set.name || `Set ${idx + 1}`,
-                  description: set.description || '',
-                  parts: [],
-                })
-              }
+            p.sets.forEach((set) => {
+              const assemblies = Array.isArray(set.assemblies) ? set.assemblies : []
+              assemblies.forEach((assembly, idx) => {
+                const assemblyId = assembly?._id || assembly?.id || assembly
+                if (!assemblyId) return
+                if (!grouped[projectId].assemblies.find((a) => a.id === assemblyId)) {
+                  grouped[projectId].assemblies.push({
+                    id: assemblyId,
+                    name: assembly?.name || `Assembly ${idx + 1}`,
+                    description: assembly?.notes || '',
+                    parts: [],
+                  })
+                }
+              })
             })
           }
         })
 
         partsData.forEach((part) => {
           const projectId = part.project?._id || part.project
-          if (!grouped[projectId]) grouped[projectId] = { sets: [] }
-          const setId = part.assembly?._id || part.assembly || 'unassigned-set'
-          const setName =
-            part.assembly?.name || (setId === 'unassigned-set' ? 'Unassigned Set' : 'Assembly Set')
-          if (!grouped[projectId].sets.find((s) => s.id === setId)) {
-            grouped[projectId].sets.push({
-              id: setId,
-              name: setName,
+          if (!grouped[projectId]) grouped[projectId] = { assemblies: [] }
+          const assemblyId = part.assembly?._id || part.assembly || 'unassigned-assembly'
+          const assemblyName =
+            part.assembly?.name ||
+            (assemblyId === 'unassigned-assembly' ? 'Unassigned Assembly' : 'Assembly')
+          if (!grouped[projectId].assemblies.find((a) => a.id === assemblyId)) {
+            grouped[projectId].assemblies.push({
+              id: assemblyId,
+              name: assemblyName,
               description: part.assembly?.notes || '',
               parts: [],
             })
           }
-          const targetSet = grouped[projectId].sets.find((s) => s.id === setId)
-          targetSet.parts.push({
+          const targetAssembly = grouped[projectId].assemblies.find((a) => a.id === assemblyId)
+          targetAssembly.parts.push({
             id: part._id,
             code: part.code,
             name: part.name,
@@ -169,20 +174,21 @@ const ConfigurationParts = () => {
 
   useEffect(() => {
     if (!selectedProjectId) return
-    const currentSets = configurations[selectedProjectId]?.sets || []
-    if (!currentSets.length) {
-      setSelectedSetId('')
+    const currentAssemblies = configurations[selectedProjectId]?.assemblies || []
+    if (!currentAssemblies.length) {
+      setSelectedAssemblyId('')
       return
     }
-    if (!currentSets.find((set) => set.id === selectedSetId)) {
-      setSelectedSetId(currentSets[0].id)
+    if (!currentAssemblies.find((assembly) => assembly.id === selectedAssemblyId)) {
+      setSelectedAssemblyId(currentAssemblies[0].id)
       setSelectedPartId('')
     }
-  }, [configurations, selectedProjectId, selectedSetId])
+  }, [configurations, selectedAssemblyId, selectedProjectId])
 
   const handleProjectChange = (value) => {
     setSelectedProjectId(value)
     setSelectedPartId('')
+    setSelectedAssemblyId('')
     const params = new URLSearchParams(searchParams)
     if (value) {
       params.set('project', value)
@@ -193,16 +199,18 @@ const ConfigurationParts = () => {
     setSearchParams(params)
   }
 
-  const selectedSet = useMemo(() => {
-    return availableSets.find((set) => set.id === selectedSetId) || null
-  }, [availableSets, selectedSetId])
+  const selectedAssembly = useMemo(() => {
+    return availableAssemblies.find((assembly) => assembly.id === selectedAssemblyId) || null
+  }, [availableAssemblies, selectedAssemblyId])
 
-  const visibleParts = selectedSet?.parts || []
+  const visibleParts = selectedAssembly?.parts || []
 
   const validate = () => {
     const nextErrors = {}
     if (!selectedProjectId) nextErrors.project = 'Select a project'
-    if (!selectedSetId) nextErrors.set = 'Select a set'
+    if (!selectedAssemblyId || selectedAssemblyId === 'unassigned-assembly') {
+      nextErrors.assembly = 'Select an assembly'
+    }
     if (!form.name.trim()) nextErrors.name = 'Name is required'
     if (!form.category) nextErrors.category = 'Choose a category'
     if (!form.type) nextErrors.type = 'Choose a type'
@@ -226,7 +234,7 @@ const ConfigurationParts = () => {
         status: form.status,
         owner: form.owner,
         project: selectedProjectId,
-        assembly: selectedSetId !== 'unassigned-set' ? selectedSetId : undefined,
+        assembly: selectedAssemblyId !== 'unassigned-assembly' ? selectedAssemblyId : undefined,
       }
       const created = await partService.add(payload)
       const normalized = {
@@ -242,13 +250,15 @@ const ConfigurationParts = () => {
       }
 
       setConfigurations((prev) => {
-        const projectConfig = prev[selectedProjectId] || { sets: [] }
-        const nextSets = projectConfig.sets.map((set) =>
-          set.id === selectedSetId ? { ...set, parts: [...(set.parts || []), normalized] } : set,
+        const projectConfig = prev[selectedProjectId] || { assemblies: [] }
+        const nextAssemblies = projectConfig.assemblies.map((assembly) =>
+          assembly.id === selectedAssemblyId
+            ? { ...assembly, parts: [...(assembly.parts || []), normalized] }
+            : assembly,
         )
         return {
           ...prev,
-          [selectedProjectId]: { ...projectConfig, sets: nextSets },
+          [selectedProjectId]: { ...projectConfig, assemblies: nextAssemblies },
         }
       })
 
@@ -294,17 +304,17 @@ const ConfigurationParts = () => {
                 </CFormSelect>
                 <CFormSelect
                   size="sm"
-                  value={selectedSetId}
-                  onChange={(e) => setSelectedSetId(e.target.value)}
-                  disabled={!availableSets.length}
-                  invalid={!!errors.set}
+                  value={selectedAssemblyId}
+                  onChange={(e) => setSelectedAssemblyId(e.target.value)}
+                  disabled={!availableAssemblies.length}
+                  invalid={!!errors.assembly}
                 >
                   <option value="">
-                    {availableSets.length ? 'Select Set' : 'No sets available'}
+                    {availableAssemblies.length ? 'Select Assembly' : 'No assemblies available'}
                   </option>
-                  {availableSets.map((set) => (
-                    <option key={set.id} value={set.id}>
-                      {set.name}
+                  {availableAssemblies.map((assembly) => (
+                    <option key={assembly.id} value={assembly.id}>
+                      {assembly.name}
                     </option>
                   ))}
                 </CFormSelect>
@@ -313,7 +323,7 @@ const ConfigurationParts = () => {
                   size="sm"
                   className="text-primary fw-semibold"
                   onClick={() => setShowAddModal(true)}
-                  disabled={!selectedSetId}
+                  disabled={!selectedAssemblyId}
                 >
                   <CIcon icon={cilPlus} className="me-2" />
                   Add Part
@@ -356,8 +366,8 @@ const ConfigurationParts = () => {
                     <CTableRow>
                       <CTableDataCell colSpan={8} className="text-center text-body-secondary py-4">
                         {selectedProjectId
-                          ? 'No parts found for this set.'
-                          : 'Select a project and set to see configuration parts.'}
+                          ? 'No parts found for this assembly.'
+                          : 'Select a project and assembly to see configuration parts.'}
                       </CTableDataCell>
                     </CTableRow>
                   )}
@@ -510,7 +520,7 @@ const ConfigurationParts = () => {
               <CButton color="light" onClick={() => setShowAddModal(false)}>
                 Cancel
               </CButton>
-              <CButton color="primary" type="submit" disabled={!selectedSetId}>
+              <CButton color="primary" type="submit" disabled={!selectedAssemblyId}>
                 <CIcon icon={cilPlus} className="me-2" />
                 Add Part
               </CButton>
