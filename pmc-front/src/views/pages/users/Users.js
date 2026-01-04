@@ -200,6 +200,234 @@ const AddUserModal = ({ visible, onClose, onCreated }) => {
   )
 }
 
+const createBulkRow = (id) => ({
+  id,
+  name: '',
+  email: '',
+  phone: '',
+  password: '',
+  role: 'user',
+  warehouseId: '',
+})
+
+// -------- Bulk Add Users Modal --------
+const BulkAddUsersModal = ({ visible, onClose, onCreated }) => {
+  const rowIdRef = useRef(1)
+  const [rows, setRows] = useState([createBulkRow(0)])
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState('')
+  const [result, setResult] = useState(null)
+  const [warehouses, setWarehouses] = useState([])
+  const [loadingWH, setLoadingWH] = useState(false)
+
+  useEffect(() => {
+    if (!visible) return
+    setRows([createBulkRow(0)])
+    rowIdRef.current = 1
+    setError('')
+    setResult(null)
+  }, [visible])
+
+  useEffect(() => {
+    const run = async () => {
+      if (!visible) return
+      setLoadingWH(true)
+      setError('')
+      try {
+        const list = await warehouseService.getAll()
+        setWarehouses(Array.isArray(list) ? list : [])
+      } catch (e) {
+        setError(e?.response?.data?.message || 'Failed to load warehouses')
+      } finally {
+        setLoadingWH(false)
+      }
+    }
+    run()
+  }, [visible])
+
+  const updateRow = (id, field, value) => {
+    setRows((prev) => prev.map((row) => (row.id === id ? { ...row, [field]: value } : row)))
+  }
+
+  const addRow = () => {
+    setRows((prev) => [...prev, createBulkRow(rowIdRef.current++)])
+  }
+
+  const removeRow = (id) => {
+    setRows((prev) => (prev.length === 1 ? prev : prev.filter((row) => row.id !== id)))
+  }
+
+  const handleSubmit = async () => {
+    setSubmitting(true)
+    setError('')
+    setResult(null)
+    try {
+      const filtered = rows.filter((row) =>
+        [row.name, row.email, row.password, row.phone].some((v) => (v || '').trim()),
+      )
+
+      if (!filtered.length) {
+        setError('Please enter at least one user.')
+        return
+      }
+
+      const payloadUsers = filtered.map((row) => ({
+        name: row.name.trim(),
+        email: row.email.trim(),
+        phone: row.phone.trim(),
+        password: row.password,
+        role: row.role,
+        warehouseId: row.warehouseId,
+      }))
+
+      const response = await usersService.addBulk({ users: payloadUsers })
+      const createdCount = response?.result?.created?.length || 0
+      const failed = response?.result?.failed || []
+
+      if (failed.length) {
+        if (createdCount) {
+          onCreated?.()
+        }
+        setResult({
+          createdCount,
+          failed,
+        })
+      } else {
+        onCreated?.()
+        onClose()
+      }
+    } catch (e) {
+      setError(e?.response?.data?.message || 'Failed to add users')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <CModal
+      visible={visible}
+      onClose={onClose}
+      size="xl"
+      className={`add-user-anim ${visible ? 'show-anim' : ''}`}
+      alignment="center"
+      scrollable
+    >
+      <CModalHeader closeButton>
+        <CModalTitle>Add Multiple Users</CModalTitle>
+      </CModalHeader>
+      <CModalBody>
+        {error && <CAlert color="danger" className="mb-3">{error}</CAlert>}
+        {result && (
+          <CAlert color="warning" className="mb-3">
+            Created {result.createdCount} user(s). {result.failed.length} failed.
+            <ul className="mt-2 mb-0">
+              {result.failed.map((item) => (
+                <li key={`${item.index}-${item.email || item.username || 'row'}`}>
+                  Row {item.index + 1}: {item.reason || 'Invalid data'}
+                </li>
+              ))}
+            </ul>
+          </CAlert>
+        )}
+
+        <div className="d-flex justify-content-end mb-3">
+          <CButton color="primary" variant="outline" size="sm" onClick={addRow}>
+            Add Row
+          </CButton>
+        </div>
+
+        <CRow className="g-3">
+          {rows.map((row, idx) => (
+            <React.Fragment key={row.id}>
+              <CCol md={3}>
+                <CFormInput
+                  label={`Name *`}
+                  value={row.name}
+                  onChange={(e) => updateRow(row.id, 'name', e.target.value)}
+                  required
+                />
+              </CCol>
+              <CCol md={3}>
+                <CFormInput
+                  label="Email *"
+                  type="email"
+                  value={row.email}
+                  onChange={(e) => updateRow(row.id, 'email', e.target.value)}
+                  required
+                />
+              </CCol>
+              <CCol md={2}>
+                <CFormInput
+                  label="Phone"
+                  value={row.phone}
+                  onChange={(e) => updateRow(row.id, 'phone', e.target.value)}
+                  placeholder="+92-300-0000000"
+                />
+              </CCol>
+              <CCol md={2}>
+                <CFormInput
+                  label="Password *"
+                  type="password"
+                  value={row.password}
+                  onChange={(e) => updateRow(row.id, 'password', e.target.value)}
+                  required
+                />
+              </CCol>
+              <CCol md={2}>
+                <CFormSelect
+                  label="Role *"
+                  value={row.role}
+                  onChange={(e) => updateRow(row.id, 'role', e.target.value)}
+                >
+                  <option value="driver">driver</option>
+                  <option value="user">user</option>
+                  <option value="csr_user">csr_user</option>
+                  <option value="admin">admin</option>
+                </CFormSelect>
+              </CCol>
+
+              <CCol md={4}>
+                <CFormSelect
+                  label="Warehouse (optional)"
+                  value={row.warehouseId}
+                  onChange={(e) => updateRow(row.id, 'warehouseId', e.target.value)}
+                  disabled={loadingWH}
+                >
+                  <option value="">— None —</option>
+                  {warehouses.map((w) => (
+                    <option key={w._id} value={w._id}>{w.name}</option>
+                  ))}
+                </CFormSelect>
+              </CCol>
+              <CCol md={2} className="d-flex align-items-end">
+                <CButton
+                  color="danger"
+                  variant="outline"
+                  size="sm"
+                  className="w-100"
+                  onClick={() => removeRow(row.id)}
+                  disabled={rows.length === 1}
+                >
+                  Remove
+                </CButton>
+              </CCol>
+              {idx < rows.length - 1 && <CCol xs={12}><hr className="my-0" /></CCol>}
+            </React.Fragment>
+          ))}
+        </CRow>
+      </CModalBody>
+      <CModalFooter>
+        <CButton color="secondary" variant="outline" onClick={onClose}>
+          Cancel
+        </CButton>
+        <CButton color="primary" onClick={handleSubmit} disabled={submitting}>
+          {submitting ? <CSpinner size="sm" /> : 'Create Users'}
+        </CButton>
+      </CModalFooter>
+    </CModal>
+  )
+}
+
 const Users = () => {
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
@@ -222,6 +450,7 @@ const Users = () => {
 
   // Add user modal
   const [addOpen, setAddOpen] = useState(false)
+  const [bulkOpen, setBulkOpen] = useState(false)
 
   const tableRef = useRef(null)
 
@@ -264,18 +493,23 @@ const Users = () => {
 
   // Build a normalized string for search
   const normalize = (v) => (v == null ? '' : String(v)).toLowerCase()
+  const getName = (u) => u.name || u.username || ''
+  const getPhone = (u) => u.phone || u.phoneNumber || ''
+  const getRoleName = (u) => u.roleId?.name || u.role?.name || u.role || ''
+  const getWarehouseName = (u) => u.warehouseId?.name || ''
+  const getActiveFlag = (u) => (u.isActive === undefined ? true : !!u.isActive)
 
   // Filter + sort
   const filtered = useMemo(() => {
     const text = normalize(globalSearch)
 
     const list = users.filter((u) => {
-      const name = normalize(u.name)
+      const name = normalize(getName(u))
       const email = normalize(u.email)
-      const phone = normalize(u.phone)
-      const roleName = normalize(u.roleId?.name)
-      const whName = normalize(u.warehouseId?.name) // expanded warehouse
-      const active = String(!!u.isActive)
+      const phone = normalize(getPhone(u))
+      const roleName = normalize(getRoleName(u))
+      const whName = normalize(getWarehouseName(u)) // expanded warehouse
+      const active = String(getActiveFlag(u))
 
       // Global search across key fields
       const matchesGlobal =
@@ -299,12 +533,14 @@ const Users = () => {
       const pick = (obj) => {
         switch (sortField) {
           case 'role':
-            return normalize(obj.roleId?.name)
+            return normalize(getRoleName(obj))
           case 'warehouse':
-            return normalize(obj.warehouseId?.name)
+            return normalize(getWarehouseName(obj))
           case 'createdAt':
             return obj.createdAt || ''
           default:
+            if (sortField === 'name') return normalize(getName(obj))
+            if (sortField === 'phone') return normalize(getPhone(obj))
             return normalize(obj[sortField])
         }
       }
@@ -327,12 +563,12 @@ const Users = () => {
   const toCSV = (rows) => {
     const header = ['Name', 'Email', 'Phone', 'Role', 'Warehouse', 'Active', 'Created']
     const lines = rows.map((u) => [
-      u.name || '',
+      getName(u) || '',
       u.email || '',
-      u.phone || '',
-      u.roleId?.name || '',
-      u.warehouseId?.name || '',
-      u.isActive ? 'Yes' : 'No',
+      getPhone(u) || '',
+      getRoleName(u) || '',
+      getWarehouseName(u) || '',
+      getActiveFlag(u) ? 'Yes' : 'No',
       u.createdAt ? new Date(u.createdAt).toLocaleString() : '',
     ])
     const csv = [header, ...lines]
@@ -451,6 +687,10 @@ const Users = () => {
           <CButton color="success" size="sm" onClick={handleExportCSV}>
             <CIcon icon={cilSpreadsheet} className="me-1" />
             Export CSV
+          </CButton>
+          <CButton color="info" variant="outline" size="sm" onClick={() => setBulkOpen(true)}>
+            <CIcon icon={cilPlus} className="me-1" />
+            Add Multiple
           </CButton>
           <CButton color="info" size="sm" onClick={() => setAddOpen(true)}>
             <CIcon icon={cilPlus} className="me-1" />
@@ -584,16 +824,16 @@ const Users = () => {
                     {paginated.length ? (
                       paginated.map((u) => (
                         <CTableRow key={u._id}>
-                          <CTableDataCell>{u.name || '—'}</CTableDataCell>
+                          <CTableDataCell>{getName(u) || '—'}</CTableDataCell>
                           <CTableDataCell>{u.email || '—'}</CTableDataCell>
-                          <CTableDataCell>{u.phone || '—'}</CTableDataCell>
+                          <CTableDataCell>{getPhone(u) || '—'}</CTableDataCell>
                           <CTableDataCell>
-                            <CBadge color="info">{u.roleId?.name || '—'}</CBadge>
+                            <CBadge color="info">{getRoleName(u) || '—'}</CBadge>
                           </CTableDataCell>
-                          <CTableDataCell>{u.warehouseId?.name || '—'}</CTableDataCell>
+                          <CTableDataCell>{getWarehouseName(u) || '—'}</CTableDataCell>
                           <CTableDataCell>
-                            <CBadge color={getActiveBadge(u.isActive)}>
-                              {u.isActive ? 'Yes' : 'No'}
+                            <CBadge color={getActiveBadge(getActiveFlag(u))}>
+                              {getActiveFlag(u) ? 'Yes' : 'No'}
                             </CBadge>
                           </CTableDataCell>
                           <CTableDataCell>
@@ -674,6 +914,11 @@ const Users = () => {
       <AddUserModal
         visible={addOpen}
         onClose={() => setAddOpen(false)}
+        onCreated={fetchUsers}
+      />
+      <BulkAddUsersModal
+        visible={bulkOpen}
+        onClose={() => setBulkOpen(false)}
         onCreated={fetchUsers}
       />
 
