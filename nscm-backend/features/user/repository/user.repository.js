@@ -18,7 +18,7 @@ class UserRepository {
     }
 
     static async getAll() {
-        return await User.find({}).exec();
+        return await User.find({}).populate('role').exec();
     }
 }
 
