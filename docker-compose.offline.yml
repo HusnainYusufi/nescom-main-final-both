@@ -19,8 +19,8 @@ services:
       - REDIS_URL=redis://127.0.0.1:6379
       - FRONTEND_URL=https://portal-legend.devmedialm.com
       - LABEL_QR_MODE=ORDER_NO
-      - SEED_ADMIN_EMAIL=classified@example.local
-      - SEED_ADMIN_USERNAME=classified-admin
+      - SEED_ADMIN_EMAIL=pmc@pmc.com
+      - SEED_ADMIN_USERNAME=PMC
       - SEED_ADMIN_PASSWORD=admin123
     ports:
       - "4173:4173"
