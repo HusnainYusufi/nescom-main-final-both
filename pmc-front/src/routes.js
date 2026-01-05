@@ -41,6 +41,9 @@ const ProjectTimelineBoard = React.lazy(
 const ConfigurationCategories = React.lazy(
   () => import('./views/pages/production/ConfigurationCategories'),
 )
+const ProjectDetails = React.lazy(() => import('./views/pages/production/ProjectDetails'))
+const ProjectSets = React.lazy(() => import('./views/pages/production/ProjectSets'))
+const SetStatusOverview = React.lazy(() => import('./views/pages/production/SetStatusOverview'))
 
 // Production module pages
 const AddSet = React.lazy(() => import('./views/pages/production/AddSet'))
@@ -110,6 +113,17 @@ const routes = [
     path: '/production/create-project-wizard',
     name: 'Create Project Wizard',
     element: ProjectCreationWizard,
+  },
+  { path: '/production/project-details', name: 'Project Details', element: ProjectDetails },
+  {
+    path: '/production/project-sets/:projectId',
+    name: 'Project Set Details',
+    element: ProjectSets,
+  },
+  {
+    path: '/production/project-sets/:projectId/status/:setId',
+    name: 'Set Status Overview',
+    element: SetStatusOverview,
   },
 
   // Other pages

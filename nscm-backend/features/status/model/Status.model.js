@@ -3,6 +3,9 @@ const mongoose = require('mongoose')
 const StatusSchema = new mongoose.Schema(
   {
     project: { type: mongoose.Schema.Types.ObjectId, ref: 'Project', required: true },
+    set: { type: mongoose.Schema.Types.ObjectId, ref: 'Set' },
+    setName: { type: String, trim: true },
+    assembly: { type: mongoose.Schema.Types.ObjectId, ref: 'Assembly' },
     part: { type: mongoose.Schema.Types.ObjectId, ref: 'Part' },
     partName: { type: String, trim: true },
     status: { type: String, default: 'Pending' },
@@ -13,4 +16,3 @@ const StatusSchema = new mongoose.Schema(
 )
 
 module.exports = mongoose.model('StatusEntry', StatusSchema)
-
