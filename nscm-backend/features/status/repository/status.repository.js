@@ -10,9 +10,12 @@ class StatusRepository {
   }
 
   static async getAll(filters = {}) {
-    return StatusModel.find(filters).populate('project', 'name code').populate('part', 'name code')
+    return StatusModel.find(filters)
+      .populate('project', 'name code')
+      .populate('set', 'name')
+      .populate('assembly', 'name type')
+      .populate('part', 'name code')
   }
 }
 
 module.exports = StatusRepository
-

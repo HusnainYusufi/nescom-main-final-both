@@ -115,14 +115,34 @@ const ProductionTreeView = () => {
 
       const normalizedStructures = (set.structures || []).map((structure) => {
         const sid = structure._id || structure.id || structure.name
+        const normalizedStructureAssemblies = (structure?.assemblies || []).map((asm) => {
+          const asmId = asm._id || asm.id || asm.name
+          return typeof asm === 'string'
+            ? { id: asmId, name: asm, status: 'Draft', qcReports: [] }
+            : {
+                id: asmId,
+                name: asm.name,
+                status: asm.status || 'Draft',
+                description: asm.description || asm.notes || '',
+                qcReports: asm.qcReports || [],
+              }
+        })
         return typeof structure === 'string'
-          ? { id: sid, name: structure, status: 'Draft', qcReports: [], description: '' }
+          ? {
+              id: sid,
+              name: structure,
+              status: 'Draft',
+              qcReports: [],
+              description: '',
+              assemblies: [],
+            }
           : {
               id: sid,
               name: structure.name,
               status: structure.status || 'Draft',
               description: structure.description || structure.notes || '',
               qcReports: structure.qcReports || [],
+              assemblies: normalizedStructureAssemblies,
             }
       })
 

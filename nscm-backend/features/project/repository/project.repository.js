@@ -10,7 +10,12 @@ class ProjectRepository {
   }
 
   static async getById(id) {
-    return await Project.findById(id).exec();
+    return await Project.findById(id)
+      .populate('category')
+      .populate('structures')
+      .populate({ path: 'sets.assemblies', populate: { path: 'parentAssembly' } })
+      .populate({ path: 'sets.structures', populate: { path: 'assemblies' } })
+      .exec();
   }
 
   static async getAll() {
@@ -18,7 +23,7 @@ class ProjectRepository {
       .populate('category')
       .populate('structures')
       .populate({ path: 'sets.assemblies', populate: { path: 'parentAssembly' } })
-      .populate('sets.structures')
+      .populate({ path: 'sets.structures', populate: { path: 'assemblies' } })
       .exec();
   }
 

@@ -92,6 +92,7 @@ const AppSidebar = () => {
           { label: 'Timeline & Discussions', to: '/production/timeline', icon: cilClock },
           { label: 'View Assemblies', to: '/production/view-assembly', icon: cilLayers },
           { label: 'View Issues', to: '/production/view-issues', icon: cilWarning },
+          { label: 'View Status', to: '/production/view-status', icon: cilClipboard },
         ],
       },
       {
@@ -107,7 +108,6 @@ const AppSidebar = () => {
             icon: cilSettings,
           },
           { label: 'Qualification Tests', to: '/production/qualification-tests', icon: cilChart },
-          { label: 'View Status', to: '/production/view-status', icon: cilClipboard },
           { label: 'View Sets', to: '/production/view-sets', icon: cilClipboard },
         ],
       },

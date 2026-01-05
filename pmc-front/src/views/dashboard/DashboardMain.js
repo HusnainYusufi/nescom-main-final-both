@@ -1,6 +1,7 @@
 // src/views/dashboard/Dashboard.js
 import React, { useEffect, useMemo, useState } from 'react'
 import { useDispatch } from 'react-redux'
+import { useNavigate } from 'react-router-dom'
 import {
   CAlert,
   CBadge,
@@ -238,6 +239,7 @@ const buildDashboardDataset = (projects = []) => {
 
 const Dashboard = () => {
   const dispatch = useDispatch()
+  const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
@@ -321,7 +323,13 @@ const Dashboard = () => {
 
   const kpiCards = useMemo(
     () => [
-      { label: 'Active Projects', value: k.activeProjects, icon: cilFactory, color: 'primary' },
+      {
+        label: 'Active Projects',
+        value: k.activeProjects,
+        icon: cilFactory,
+        color: 'primary',
+        target: '/production/project-details',
+      },
       { label: 'Total Sets', value: k.totalSets, icon: cilLayers, color: 'info' },
       { label: 'Components', value: k.totalComponents, icon: cilBolt, color: 'success' },
       { label: 'Assemblies', value: k.totalAssemblies, icon: cilSettings, color: 'warning' },
@@ -375,7 +383,14 @@ const Dashboard = () => {
       <CRow className="g-4 mb-4">
         {kpiCards.map((card) => (
           <CCol key={card.label} xs={12} md={6} xl={4} xxl={3}>
-            <CCard className="border-0 shadow-sm h-100">
+            <CCard
+              className="border-0 shadow-sm h-100"
+              role={card.target ? 'button' : undefined}
+              style={{ cursor: card.target ? 'pointer' : 'default' }}
+              onClick={() => {
+                if (card.target) navigate(card.target)
+              }}
+            >
               <CCardBody className="d-flex justify-content-between align-items-center py-4">
                 <div>
                   <div className="text-body-secondary text-uppercase small">{card.label}</div>
