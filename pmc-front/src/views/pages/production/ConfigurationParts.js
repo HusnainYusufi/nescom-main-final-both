@@ -55,13 +55,13 @@ const ConfigurationParts = () => {
   const [selectedPartId, setSelectedPartId] = useState('')
   const [showAddModal, setShowAddModal] = useState(false)
   const [form, setForm] = useState({
+    partId: '',
     name: '',
     shortName: '',
     category: '',
     type: '',
     level: '',
     owner: '',
-    status: 'Draft',
   })
   const [errors, setErrors] = useState({})
   const [loading, setLoading] = useState(false)
@@ -211,6 +211,7 @@ const ConfigurationParts = () => {
     if (!selectedAssemblyId || selectedAssemblyId === 'unassigned-assembly') {
       nextErrors.assembly = 'Select an assembly'
     }
+    if (!form.partId.trim()) nextErrors.partId = 'Part ID is required'
     if (!form.name.trim()) nextErrors.name = 'Name is required'
     if (!form.category) nextErrors.category = 'Choose a category'
     if (!form.type) nextErrors.type = 'Choose a type'
@@ -227,11 +228,10 @@ const ConfigurationParts = () => {
       setLoading(true)
       const payload = {
         name: form.name,
-        code: form.shortName?.trim() || `PART-${Date.now()}`,
+        code: form.partId.trim(),
         category: form.category,
         type: form.type,
         level: form.level,
-        status: form.status,
         owner: form.owner,
         project: selectedProjectId,
         assembly: selectedAssemblyId !== 'unassigned-assembly' ? selectedAssemblyId : undefined,
@@ -263,13 +263,13 @@ const ConfigurationParts = () => {
       })
 
       setForm({
+        partId: '',
         name: '',
         shortName: '',
         category: '',
         type: '',
         level: '',
         owner: '',
-        status: 'Draft',
       })
       setSelectedPartId(normalized.id)
       setErrors({})
@@ -414,6 +414,15 @@ const ConfigurationParts = () => {
             <CRow className="g-3">
               <CCol md={6}>
                 <CFormInput
+                  label="Part ID*"
+                  value={form.partId}
+                  onChange={(e) => setForm({ ...form, partId: e.target.value })}
+                  invalid={!!errors.partId}
+                  feedbackInvalid={errors.partId}
+                />
+              </CCol>
+              <CCol md={6}>
+                <CFormInput
                   label="Name*"
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
@@ -484,17 +493,6 @@ const ConfigurationParts = () => {
                   onChange={(e) => setForm({ ...form, owner: e.target.value })}
                 />
               </CCol>
-              <CCol md={6}>
-                <CFormSelect
-                  label="Status"
-                  value={form.status}
-                  onChange={(e) => setForm({ ...form, status: e.target.value })}
-                >
-                  <option>Draft</option>
-                  <option>Under Review</option>
-                  <option>Qualified</option>
-                </CFormSelect>
-              </CCol>
             </CRow>
           </CModalBody>
           <CModalFooter className="d-flex justify-content-between">
@@ -504,13 +502,13 @@ const ConfigurationParts = () => {
               onClick={() =>
                 setForm({
                   id: '',
+                  partId: '',
                   name: '',
                   shortName: '',
                   category: '',
                   type: '',
                   level: '',
                   owner: '',
-                  status: 'Draft',
                 })
               }
             >

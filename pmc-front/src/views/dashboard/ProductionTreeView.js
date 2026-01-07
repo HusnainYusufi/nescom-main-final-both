@@ -631,7 +631,10 @@ const ProductionTreeView = () => {
 
   const getStatusBadgeColor = (status = '') => {
     const normalized = status.toLowerCase()
-    if (normalized.includes('complete')) return 'success'
+    if (normalized.includes('complete') || normalized.includes('integration')) return 'success'
+    if (normalized.includes('casting')) return 'primary'
+    if (normalized.includes('qc')) return 'info'
+    if (normalized.includes('maintenance') || normalized.includes('ablative')) return 'warning'
     if (normalized.includes('production')) return 'primary'
     if (normalized.includes('config')) return 'info'
     if (normalized.includes('pending')) return 'warning'
@@ -808,9 +811,9 @@ const ProductionTreeView = () => {
           <option>Complete</option>
         </CFormSelect>
         <CButton
-          color="light"
+          color="primary"
           size="sm"
-          variant="outline"
+          className="fw-semibold"
           onClick={(event) => {
             event.stopPropagation()
             navigate(`/production/create-project-wizard?edit=${project.id}`)
@@ -819,9 +822,9 @@ const ProductionTreeView = () => {
           Edit
         </CButton>
         <CButton
-          color="light"
+          color={isExpanded ? 'dark' : 'info'}
           size="sm"
-          variant="outline"
+          className="fw-semibold text-white"
           onClick={(event) => {
             event.stopPropagation()
             setExpandedProjects((prev) => (prev === project.id ? null : project.id))

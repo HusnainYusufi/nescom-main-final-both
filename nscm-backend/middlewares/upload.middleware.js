@@ -24,6 +24,23 @@ const fileFilter = (_req, file, cb) => {
   cb(new Error('Only JPG, PNG, or WEBP images allowed'));
 };
 
+/* Accept images + documents for qualification records */
+const documentFilter = (_req, file, cb) => {
+  const allowed = [
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'text/plain',
+    'image/jpeg',
+    'image/png',
+    'image/webp',
+  ];
+  if (allowed.includes(file.mimetype)) return cb(null, true);
+  cb(new Error('Unsupported document type'));
+};
+
 /* Base Multer instance (avatar ≤2 MB) */
 const upload       = multer({ storage, limits: { fileSize: 2 * 1024 * 1024 }, fileFilter });
 const avatarUpload = upload.single('profilePicture');
@@ -41,8 +58,15 @@ const profileUpload = upload.fields([
   { name: 'portfolio',      maxCount: 10 }
 ]);
 
+const documentUpload = multer({
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: documentFilter
+}).single('document');
+
 module.exports = Object.assign(upload, {
   avatarUpload,
   portfolioUpload,
-  profileUpload
+  profileUpload,
+  documentUpload
 });

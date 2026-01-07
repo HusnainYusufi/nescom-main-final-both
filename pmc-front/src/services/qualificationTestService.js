@@ -17,7 +17,17 @@ const qualificationTestService = {
     }
     return data.result
   },
+  upload: async (file) => {
+    const formData = new FormData()
+    formData.append('document', file)
+    const { data } = await api.post('/qualification-test/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    if (!data?.result) {
+      throw new Error(data?.message || 'Failed to upload document')
+    }
+    return data.result
+  },
 }
 
 export default qualificationTestService
-

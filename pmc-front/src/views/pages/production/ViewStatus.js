@@ -47,7 +47,8 @@ const ViewStatus = () => {
     setId: '',
     assemblyId: '',
     partId: '',
-    status: 'Pending',
+    status: '',
+    processOwner: '',
     updatedOn: '',
     remarks: '',
   })
@@ -66,10 +67,29 @@ const ViewStatus = () => {
       assemblyName: s.assembly?.name || '—',
       partId: s.part?._id || s.part || '',
       part: s.part?.name || s.partName || '—',
-      status: s.status || 'Pending',
+      status: s.status || '—',
+      processOwner: s.processOwner || '—',
       updated: s.updatedOn ? new Date(s.updatedOn).toISOString().slice(0, 10) : '—',
       remarks: s.remarks || '—',
     }))
+
+  const statusOptions = [
+    'Under Maintenance',
+    'Under QC',
+    'Under Ablative',
+    'Under Casting',
+    'Under Integration',
+  ]
+  const processOwners = ['MM', 'QC', 'CPS', 'E&I']
+
+  const statusBadgeColor = (status = '') => {
+    const normalized = status.toLowerCase()
+    if (normalized.includes('integration')) return 'success'
+    if (normalized.includes('casting')) return 'primary'
+    if (normalized.includes('qc')) return 'info'
+    if (normalized.includes('maintenance') || normalized.includes('ablative')) return 'warning'
+    return 'secondary'
+  }
 
   useEffect(() => {
     const loadProjects = async () => {
@@ -113,7 +133,8 @@ const ViewStatus = () => {
       setId: '',
       assemblyId: '',
       partId: '',
-      status: 'Pending',
+      status: '',
+      processOwner: '',
       updatedOn: '',
       remarks: '',
     })
@@ -133,6 +154,7 @@ const ViewStatus = () => {
       assemblyId: row.assemblyId,
       partId: row.partId,
       status: row.status,
+      processOwner: row.processOwner === '—' ? '' : row.processOwner,
       updatedOn: row.updated === '—' ? '' : row.updated,
       remarks: row.remarks === '—' ? '' : row.remarks,
     })
@@ -213,7 +235,8 @@ const ViewStatus = () => {
       setName: selectedSet?.name || undefined,
       assembly: form.assemblyId,
       part: form.partId,
-      status: form.status || 'Pending',
+      status: form.status || undefined,
+      processOwner: form.processOwner || undefined,
       remarks: form.remarks || undefined,
       updatedOn: form.updatedOn || undefined,
     }
@@ -252,7 +275,7 @@ const ViewStatus = () => {
 
   const exportCSV = () => {
     const csv = [
-      ['ID', 'Project', 'Set', 'Assembly', 'Part', 'Status', 'Last Updated', 'Remarks'],
+      ['ID', 'Project', 'Set', 'Assembly', 'Part', 'Status', 'Process Owner', 'Last Updated', 'Remarks'],
       ...filtered.map((s) => [
         s.id,
         s.projectName,
@@ -260,6 +283,7 @@ const ViewStatus = () => {
         s.assemblyName,
         s.part,
         s.status,
+        s.processOwner,
         s.updated,
         s.remarks,
       ]),
@@ -316,6 +340,7 @@ const ViewStatus = () => {
                     <CTableHeaderCell>Assembly</CTableHeaderCell>
                     <CTableHeaderCell>Part</CTableHeaderCell>
                     <CTableHeaderCell>Status</CTableHeaderCell>
+                    <CTableHeaderCell>Process Owner</CTableHeaderCell>
                     <CTableHeaderCell>Updated</CTableHeaderCell>
                     <CTableHeaderCell>Remarks</CTableHeaderCell>
                     <CTableHeaderCell>Actions</CTableHeaderCell>
@@ -324,7 +349,7 @@ const ViewStatus = () => {
                 <CTableBody>
                   {currentData.length === 0 ? (
                     <CTableRow>
-                      <CTableDataCell colSpan={9} className="text-center text-body-secondary py-4">
+                      <CTableDataCell colSpan={10} className="text-center text-body-secondary py-4">
                         No status entries found.
                       </CTableDataCell>
                     </CTableRow>
@@ -337,18 +362,9 @@ const ViewStatus = () => {
                         <CTableDataCell>{s.assemblyName}</CTableDataCell>
                         <CTableDataCell>{s.part}</CTableDataCell>
                         <CTableDataCell>
-                          <span
-                            className={`badge bg-${
-                              s.status.toLowerCase().includes('complete')
-                                ? 'success'
-                                : s.status.toLowerCase().includes('progress')
-                                  ? 'info'
-                                  : 'warning'
-                            }`}
-                          >
-                            {s.status}
-                          </span>
+                          <span className={`badge bg-${statusBadgeColor(s.status)}`}>{s.status}</span>
                         </CTableDataCell>
+                        <CTableDataCell>{s.processOwner}</CTableDataCell>
                         <CTableDataCell>{s.updated}</CTableDataCell>
                         <CTableDataCell>{s.remarks}</CTableDataCell>
                         <CTableDataCell>
@@ -488,10 +504,22 @@ const ViewStatus = () => {
                 value={form.status}
                 onChange={(e) => setForm({ ...form, status: e.target.value })}
               >
-                <option>Pending</option>
-                <option>In Progress</option>
-                <option>Completed</option>
-                <option>Resolved</option>
+                <option value="">Select status</option>
+                {statusOptions.map((option) => (
+                  <option key={option}>{option}</option>
+                ))}
+              </CFormSelect>
+            </div>
+            <div className="mb-3">
+              <CFormSelect
+                label="Process Owner"
+                value={form.processOwner}
+                onChange={(e) => setForm({ ...form, processOwner: e.target.value })}
+              >
+                <option value="">Select owner</option>
+                {processOwners.map((owner) => (
+                  <option key={owner}>{owner}</option>
+                ))}
               </CFormSelect>
             </div>
             <div className="mb-3 d-flex gap-2">
