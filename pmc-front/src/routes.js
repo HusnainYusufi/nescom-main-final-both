@@ -32,6 +32,9 @@ const BuildConfiguration = React.lazy(
 const QualificationTestsOnParts = React.lazy(
   () => import('./views/pages/production/QualificationTestsOnParts'),
 )
+const QualificationDocuments = React.lazy(
+  () => import('./views/pages/production/QualificationDocuments'),
+)
 const ProjectCreationWizard = React.lazy(
   () => import('./views/pages/production/ProjectCreationWizard'),
 )
@@ -103,6 +106,11 @@ const routes = [
     path: '/production/qualification-tests',
     name: 'Qualification Tests on Parts',
     element: QualificationTestsOnParts,
+  },
+  {
+    path: '/production/qualification',
+    name: 'Qualification Documents',
+    element: QualificationDocuments,
   },
   {
     path: '/production/configuration-categories',

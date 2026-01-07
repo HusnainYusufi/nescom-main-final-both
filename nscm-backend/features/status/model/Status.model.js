@@ -9,6 +9,7 @@ const StatusSchema = new mongoose.Schema(
     part: { type: mongoose.Schema.Types.ObjectId, ref: 'Part' },
     partName: { type: String, trim: true },
     status: { type: String, default: 'Pending' },
+    processOwner: { type: String, trim: true },
     remarks: { type: String, trim: true },
     updatedOn: { type: Date, default: Date.now },
   },

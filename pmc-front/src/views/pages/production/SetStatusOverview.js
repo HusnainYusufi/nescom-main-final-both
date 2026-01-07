@@ -15,8 +15,12 @@ import statusService from '../../../services/statusService'
 
 const getStatusColor = (status = '') => {
   const normalized = status.toLowerCase()
-  if (normalized.includes('complete') || normalized.includes('done')) return 'success'
-  if (normalized.includes('progress') || normalized.includes('active')) return 'info'
+  if (normalized.includes('integration') || normalized.includes('complete') || normalized.includes('done')) {
+    return 'success'
+  }
+  if (normalized.includes('casting')) return 'primary'
+  if (normalized.includes('qc')) return 'info'
+  if (normalized.includes('maintenance') || normalized.includes('ablative')) return 'warning'
   if (normalized.includes('hold') || normalized.includes('halt')) return 'danger'
   return 'secondary'
 }
@@ -56,7 +60,6 @@ const SetStatusOverview = () => {
   }, [projectId, setId])
 
   const structures = useMemo(() => setRecord?.structures || [], [setRecord])
-  const setAssemblies = useMemo(() => setRecord?.assemblies || [], [setRecord])
   const latestStatusByAssembly = useMemo(() => {
     const map = new Map()
     statusEntries.forEach((entry) => {
@@ -93,7 +96,7 @@ const SetStatusOverview = () => {
         ) : (
           <>
             <CRow className="g-4">
-              {structures.length === 0 && setAssemblies.length === 0 ? (
+              {structures.length === 0 ? (
                 <CCol xs={12}>
                   <div className="text-center text-body-secondary py-5">
                     No structures or assemblies recorded for this set yet.
@@ -121,6 +124,8 @@ const SetStatusOverview = () => {
                           <div className="d-grid gap-2">
                             {structure.assemblies.map((assembly) => {
                               const entry = latestStatusByAssembly.get(assembly._id || assembly.id)
+                              const statusLabel =
+                                entry?.remarks || entry?.status || assembly.status || 'Draft'
                               return (
                                 <div
                                   key={assembly._id || assembly.id || assembly.name}
@@ -135,7 +140,7 @@ const SetStatusOverview = () => {
                                     </div>
                                   </div>
                                   <CBadge color={getStatusColor(entry?.status || assembly.status)}>
-                                    {entry?.status || assembly.status || 'Draft'}
+                                    {statusLabel}
                                   </CBadge>
                                 </div>
                               )
@@ -149,35 +154,6 @@ const SetStatusOverview = () => {
               )}
             </CRow>
 
-            {setAssemblies.length > 0 && (
-              <div className="mt-4">
-                <h6 className="fw-semibold">Set-level assemblies</h6>
-                <CRow className="g-3">
-                  {setAssemblies.map((assembly) => {
-                    const entry = latestStatusByAssembly.get(assembly._id || assembly.id)
-                    return (
-                      <CCol key={assembly._id || assembly.id || assembly.name} xs={12} md={6} lg={4}>
-                        <CCard className="h-100 border-0">
-                          <CCardBody className="d-flex justify-content-between align-items-center">
-                            <div>
-                              <div className="fw-semibold">{assembly.name || 'Assembly'}</div>
-                              <div className="text-body-secondary small">
-                                {entry?.part?.name || entry?.partName
-                                  ? `Part: ${entry?.part?.name || entry?.partName}`
-                                  : assembly.type || 'Assembly'}
-                              </div>
-                            </div>
-                            <CBadge color={getStatusColor(entry?.status || assembly.status)}>
-                              {entry?.status || assembly.status || 'Draft'}
-                            </CBadge>
-                          </CCardBody>
-                        </CCard>
-                      </CCol>
-                    )
-                  })}
-                </CRow>
-              </div>
-            )}
           </>
         )}
       </CCardBody>
