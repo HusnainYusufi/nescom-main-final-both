@@ -13,6 +13,9 @@ const Page500 = React.lazy(() => import('./views/pages/page500/Page500'))
 
 // Inside-layout views
 const DashboardMain = React.lazy(() => import('./views/dashboard/DashboardMain'))
+const OfflineChartsDashboard = React.lazy(
+  () => import('./views/dashboard/OfflineChartsDashboard'),
+)
 const Warehouses = React.lazy(() => import('./views/pages/warehouses/Warehouses'))
 const Orders = React.lazy(() => import('./views/pages/orders/Orders'))
 const Users = React.lazy(() => import('./views/pages/users/Users'))
@@ -91,6 +94,11 @@ const routes = [
 
   // Main dashboards
   { path: '/dashboard', name: 'Dashboard', element: DashboardMain },
+  {
+    path: '/dashboard/offline-analytics',
+    name: 'Offline Analytics',
+    element: OfflineChartsDashboard,
+  },
   { path: '/production', name: 'Production', element: ProductionHome },
   { path: '/production/treeview', name: 'Production Tree View', element: ProductionTreeView },
   { path: '/financial/treeview', name: 'Financial Tree View', element: FinancialTreeView },

@@ -28,6 +28,12 @@ const _nav = [
     to: '/dashboard',
     icon: <CIcon icon={cilSpeedometer} customClassName="nav-icon" />,
   },
+  {
+    component: CNavItem,
+    name: 'Offline Analytics',
+    to: '/dashboard/offline-analytics',
+    icon: <CIcon icon={cilChart} customClassName="nav-icon" />,
+  },
 
   // 🔧 Production Module
   {
