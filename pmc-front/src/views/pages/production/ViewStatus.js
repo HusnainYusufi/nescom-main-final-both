@@ -46,6 +46,7 @@ const ViewStatus = () => {
     project: '',
     setId: '',
     assemblyId: '',
+    partItem: '',
     partId: '',
     status: '',
     processOwner: '',
@@ -132,6 +133,7 @@ const ViewStatus = () => {
       project: '',
       setId: '',
       assemblyId: '',
+      partItem: '',
       partId: '',
       status: '',
       processOwner: '',
@@ -152,6 +154,7 @@ const ViewStatus = () => {
       project: row.projectId,
       setId: row.setId,
       assemblyId: row.assemblyId,
+      partItem: row.part === '—' ? '' : row.part,
       partId: row.partId,
       status: row.status,
       processOwner: row.processOwner === '—' ? '' : row.processOwner,
@@ -208,6 +211,26 @@ const ViewStatus = () => {
     return Array.from(deduped.values())
   }, [form.setId, setOptions])
 
+  const partItemLabel = (part) =>
+    part?.name || part?.code || part?.partId || part?.shortName || 'Part'
+  const partIdLabel = (part) =>
+    part?.code || part?.partId || part?._id || part?.id || 'ID'
+
+  const partItemOptions = useMemo(() => {
+    const deduped = new Map()
+    parts.forEach((part) => {
+      const label = partItemLabel(part)
+      if (!label || deduped.has(label)) return
+      deduped.set(label, part)
+    })
+    return Array.from(deduped.keys())
+  }, [parts])
+
+  const partIdOptions = useMemo(() => {
+    if (!form.partItem) return []
+    return parts.filter((part) => partItemLabel(part) === form.partItem)
+  }, [form.partItem, parts])
+
   const handleSave = async (e) => {
     e.preventDefault()
     if (!form.project) {
@@ -222,8 +245,8 @@ const ViewStatus = () => {
       setError('Assembly is required.')
       return
     }
-    if (!form.partId) {
-      setError('Part is required.')
+    if (form.partItem && !form.partId) {
+      setError('Part ID is required when a part item is selected.')
       return
     }
     setSaving(true)
@@ -234,7 +257,7 @@ const ViewStatus = () => {
       set: form.setId,
       setName: selectedSet?.name || undefined,
       assembly: form.assemblyId,
-      part: form.partId,
+      part: form.partId || undefined,
       status: form.status || undefined,
       processOwner: form.processOwner || undefined,
       remarks: form.remarks || undefined,
@@ -408,19 +431,20 @@ const ViewStatus = () => {
           </CModalHeader>
           <CModalBody>
             <div className="mb-3">
-              <CFormSelect
-                label="Project*"
-                value={form.project}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    project: e.target.value,
-                    setId: '',
-                    assemblyId: '',
-                    partId: '',
-                  })
-                }
-                required
+                <CFormSelect
+                  label="Project*"
+                  value={form.project}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      project: e.target.value,
+                      setId: '',
+                      assemblyId: '',
+                      partItem: '',
+                      partId: '',
+                    })
+                  }
+                  required
               >
                 <option value="">
                   {loadingProjects ? 'Loading projects...' : 'Select project'}
@@ -434,17 +458,18 @@ const ViewStatus = () => {
             </div>
             <div className="mb-3">
               <CFormSelect
-                label="Set*"
-                value={form.setId}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    setId: e.target.value,
-                    assemblyId: '',
-                    partId: '',
-                  })
-                }
-                required
+                  label="Set*"
+                  value={form.setId}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      setId: e.target.value,
+                      assemblyId: '',
+                      partItem: '',
+                      partId: '',
+                    })
+                  }
+                  required
                 disabled={!form.project}
               >
                 <option value="">Select set</option>
@@ -457,18 +482,19 @@ const ViewStatus = () => {
             </div>
             <div className="mb-3">
               <CFormSelect
-                label="Assembly*"
-                value={form.assemblyId}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    assemblyId: e.target.value,
-                    partId: '',
-                  })
-                }
-                required
-                disabled={!form.setId}
-              >
+                  label="Assembly*"
+                  value={form.assemblyId}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      assemblyId: e.target.value,
+                      partItem: '',
+                      partId: '',
+                    })
+                  }
+                  required
+                  disabled={!form.setId}
+                >
                 <option value="">Select assembly</option>
                 {assemblyOptions.map((assembly) => (
                   <option
@@ -482,18 +508,40 @@ const ViewStatus = () => {
             </div>
             <div className="mb-3">
               <CFormSelect
-                label="Part / Item*"
-                value={form.partId}
-                onChange={(e) => setForm({ ...form, partId: e.target.value })}
-                required
+                label="Part / Item"
+                value={form.partItem}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    partItem: e.target.value,
+                    partId: '',
+                  })
+                }
                 disabled={!form.assemblyId || loadingParts}
               >
                 <option value="">
-                  {loadingParts ? 'Loading parts...' : 'Select part'}
+                  {loadingParts ? 'Loading parts...' : 'Select part item'}
                 </option>
-                {parts.map((part) => (
+                {partItemOptions.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </CFormSelect>
+            </div>
+            <div className="mb-3">
+              <CFormSelect
+                label="Part ID"
+                value={form.partId}
+                onChange={(e) => setForm({ ...form, partId: e.target.value })}
+                disabled={!form.partItem || loadingParts}
+              >
+                <option value="">
+                  {loadingParts ? 'Loading parts...' : 'Select part ID'}
+                </option>
+                {partIdOptions.map((part) => (
                   <option key={part._id || part.id} value={part._id || part.id}>
-                    {part.name || part.code || 'Part'}
+                    {partIdLabel(part)}
                   </option>
                 ))}
               </CFormSelect>
