@@ -5,7 +5,10 @@ class StatusService {
     if (!data?.project) return { status: 400, message: 'Project is required', result: null }
     if (!data?.set) return { status: 400, message: 'Set is required', result: null }
     if (!data?.assembly) return { status: 400, message: 'Assembly is required', result: null }
-    if (!data?.part) return { status: 400, message: 'Part is required', result: null }
+    const statusType = data?.statusType || 'CURRENT'
+    if (['PRM', 'PRE-PRM'].includes(statusType) && !data?.meeting) {
+      return { status: 400, message: 'Meeting is required for PRM/PRE-PRM status', result: null }
+    }
     const created = await StatusRepo.create(data)
     return { status: 200, message: 'Created', result: created }
   }
@@ -24,6 +27,8 @@ class StatusService {
     if (filters?.assembly) query.assembly = filters.assembly
     if (filters?.part) query.part = filters.part
     if (filters?.status) query.status = filters.status
+    if (filters?.statusType) query.statusType = filters.statusType
+    if (filters?.meeting) query.meeting = filters.meeting
     const results = await StatusRepo.getAll(query)
     return { status: 200, message: 'Record Found', result: results }
   }

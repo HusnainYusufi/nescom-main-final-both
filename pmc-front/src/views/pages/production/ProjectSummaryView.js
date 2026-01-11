@@ -17,19 +17,20 @@ import {
   CFormSelect,
 } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
-import { cilFactory, cilWarning, cilMediaPlay } from '@coreui/icons'
+import { cilFactory, cilMediaPlay } from '@coreui/icons'
 import { TourProvider, useTour } from '@reactour/tour'
 import { useDispatch, useSelector } from 'react-redux'
+import { useSearchParams } from 'react-router-dom'
 import projectService from '../../../services/projectService'
 import statusService from '../../../services/statusService'
-import qualificationTestService from '../../../services/qualificationTestService'
-import issueService from '../../../services/issueService'
+import productionReviewService from '../../../services/productionReviewService'
 
 const ProjectSummaryInner = () => {
   const { setIsOpen } = useTour()
   const dispatch = useDispatch()
   const projects = useSelector((state) => state.projects)
   const activeProjectId = useSelector((state) => state.activeProjectId)
+  const [searchParams] = useSearchParams()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [summary, setSummary] = useState(null)
@@ -41,8 +42,13 @@ const ProjectSummaryInner = () => {
   }, [dispatch])
 
   useEffect(() => {
+    const setParam = searchParams.get('set')
+    if (setParam) {
+      setSelectedSetId(setParam)
+      return
+    }
     setSelectedSetId('all')
-  }, [activeProjectId])
+  }, [activeProjectId, searchParams])
 
   useEffect(() => {
     const loadSummary = async () => {
@@ -51,40 +57,55 @@ const ProjectSummaryInner = () => {
       try {
         const projectList = projects?.length ? projects : await projectService.getAll()
         setProjectsList(projectList || [])
+        const projectParam = searchParams.get('project')
         const selected =
-          projectList.find((p) => (p._id || p.id) === activeProjectId) || projectList[0]
+          projectList.find((p) =>
+            String(p._id || p.id) === String(projectParam || activeProjectId),
+          ) || projectList[0]
         if (!selected) {
           setSummary(null)
           setLoading(false)
           return
         }
 
-        if (!activeProjectId) {
-          dispatch({ type: 'setActiveProject', projectId: selected._id || selected.id })
+        const projectId = selected._id || selected.id
+        if (projectId && String(activeProjectId) !== String(projectId)) {
+          dispatch({ type: 'setActiveProject', projectId })
         }
 
-        const projectId = selected._id || selected.id
-        const [statuses, qualifications, issues] = await Promise.all([
+        const [statuses, discussionPoints] = await Promise.all([
           statusService.getAll({ project: projectId }).catch(() => []),
-          qualificationTestService.getAll({ project: projectId }).catch(() => []),
-          issueService.getAll().catch(() => []),
+          productionReviewService.getDiscussionPoints({ project: projectId }).catch(() => []),
         ])
 
         const latestStatusBySet = new Map()
-        const latestStatusByAssembly = new Map()
+        const latestStatusByAssemblyType = new Map()
         statuses.forEach((entry) => {
           const setKey = entry.set?._id || entry.set
           const asmKey = entry.assembly?._id || entry.assembly
-          const updatedAt = entry.updatedOn ? new Date(entry.updatedOn).getTime() : 0
-          if (setKey) {
+          const statusType = entry.statusType || 'CURRENT'
+          const updatedAt =
+            statusType === 'CURRENT'
+              ? entry.updatedOn
+                ? new Date(entry.updatedOn).getTime()
+                : 0
+              : entry.meeting?.meetingDate
+                ? new Date(entry.meeting.meetingDate).getTime()
+                : entry.updatedOn
+                  ? new Date(entry.updatedOn).getTime()
+                  : 0
+          if (setKey && statusType === 'CURRENT') {
             const existing = latestStatusBySet.get(setKey)
             const existingDate = existing?.updatedOn ? new Date(existing.updatedOn).getTime() : 0
             if (!existing || updatedAt >= existingDate) latestStatusBySet.set(setKey, entry)
           }
           if (asmKey) {
-            const existing = latestStatusByAssembly.get(asmKey)
-            const existingDate = existing?.updatedOn ? new Date(existing.updatedOn).getTime() : 0
-            if (!existing || updatedAt >= existingDate) latestStatusByAssembly.set(asmKey, entry)
+            const key = `${asmKey}-${statusType}`
+            const existing = latestStatusByAssemblyType.get(key)
+            const existingDate = existing?.updatedAt || 0
+            if (!existing || updatedAt >= existingDate) {
+              latestStatusByAssemblyType.set(key, { ...entry, updatedAt })
+            }
           }
         })
 
@@ -100,6 +121,23 @@ const ProjectSummaryInner = () => {
           }
         })
 
+        const latestDiscussionBySet = new Map()
+        discussionPoints.forEach((point) => {
+          const setId = point.set?._id || point.set
+          if (!setId) return
+          const meetingDate = point.meeting?.meetingDate
+            ? new Date(point.meeting.meetingDate).getTime()
+            : 0
+          const existing = latestDiscussionBySet.get(setId)
+          if (!existing || meetingDate >= existing.meetingDate) {
+            latestDiscussionBySet.set(setId, {
+              meetingNo: point.meeting?.meetingNo || '—',
+              discussionPoint: point.discussionPoint || '—',
+              meetingDate,
+            })
+          }
+        })
+
         const assemblies = []
         ;(selected.sets || []).forEach((set) => {
           const structures = set.structures || []
@@ -112,29 +150,16 @@ const ProjectSummaryInner = () => {
             }
             ;(structure.assemblies || []).forEach((assembly) => {
               const asmId = assembly._id || assembly.id || assembly
-              const entry = latestStatusByAssembly.get(asmId)
               group.parts.push({
                 name: assembly.name || 'Assembly',
-                status: entry?.remarks || entry?.status || assembly.status || 'Draft',
+                lastPrmStatus: latestStatusByAssemblyType.get(`${asmId}-PRM`) || null,
+                currentStatus: latestStatusByAssemblyType.get(`${asmId}-CURRENT`) || null,
+                lastPrePrmStatus: latestStatusByAssemblyType.get(`${asmId}-PRE-PRM`) || null,
               })
             })
             if (group.parts.length) assemblies.push(group)
           })
         })
-
-        const qualificationRows = (qualifications || []).map((q) => ({
-          stage: q.title || q.documentType || 'Qualification',
-          result: q.status || 'Pending',
-          remarks: q.remarks || '—',
-        }))
-
-        const issuesRows = (issues || [])
-          .filter((issue) => String(issue.project?._id || issue.project) === String(projectId))
-          .map((issue) => ({
-            title: issue.title,
-            severity: issue.severity || 'Medium',
-            owner: issue.assignedTo || '—',
-          }))
 
         setSummary({
           project: {
@@ -145,8 +170,7 @@ const ProjectSummaryInner = () => {
           },
           sets,
           assemblies,
-          qualification: qualificationRows,
-          issues: issuesRows,
+          discussionBySet: latestDiscussionBySet,
         })
       } catch (err) {
         setError(err?.message || 'Unable to load project review data.')
@@ -157,7 +181,7 @@ const ProjectSummaryInner = () => {
     }
 
     loadSummary()
-  }, [activeProjectId, dispatch, projects])
+  }, [activeProjectId, dispatch, projects, searchParams])
 
   useEffect(() => {
     if (!summary || selectedSetId === 'all') return
@@ -185,6 +209,36 @@ const ProjectSummaryInner = () => {
     if (normalized.includes('testing') || normalized.includes('fabrication')) return 'warning'
     return 'secondary'
   }
+
+  const formatDate = (value) => (value ? new Date(value).toISOString().slice(0, 10) : '—')
+
+  const renderStatusDetails = (entry) => {
+    if (!entry) return <span className="text-body-secondary">—</span>
+    const statusText = entry?.remarks || entry?.status || '—'
+    const dateValue = entry.meeting?.meetingDate || entry.updatedOn
+    return (
+      <div className="d-flex flex-column gap-1">
+        <CBadge color={statusColor(entry.status || statusText)}>{entry.status || statusText}</CBadge>
+        {entry.meeting?.meetingNo && (
+          <div className="small text-body-secondary">{entry.meeting.meetingNo}</div>
+        )}
+        {dateValue && (
+          <div className="small text-body-secondary">ECD: {formatDate(dateValue)}</div>
+        )}
+        {entry.remarks && <div className="small">{entry.remarks}</div>}
+      </div>
+    )
+  }
+
+  const discussionEntry = useMemo(() => {
+    if (!summary?.discussionBySet) return null
+    if (selectedSetId && selectedSetId !== 'all') {
+      return summary.discussionBySet.get(selectedSetId) || null
+    }
+    const firstSet = summary.sets?.[0]
+    if (!firstSet) return null
+    return summary.discussionBySet.get(firstSet.id) || null
+  }, [summary, selectedSetId])
 
   return (
     <>
@@ -253,7 +307,7 @@ const ProjectSummaryInner = () => {
           </CRow>
 
           <CRow className="g-4">
-            <CCol lg={5}>
+            <CCol lg={4}>
               <h6 className="fw-bold text-info border-bottom pb-1 mb-2 tour-sets">
                 Project Sets
               </h6>
@@ -289,26 +343,31 @@ const ProjectSummaryInner = () => {
               </CTable>
             </CCol>
 
-            <CCol lg={7}>
+            <CCol lg={8}>
               {visibleAssemblies.map((a, index) => (
                 <div key={index} className="mb-4">
-                  <h6 className="fw-bold text-info border-bottom pb-1 mb-2" data-tour={a.type.toLowerCase()}>
+                  <h6
+                    className="fw-bold text-info border-bottom pb-1 mb-2"
+                    data-tour={a.type.toLowerCase()}
+                  >
                     {a.type}
                   </h6>
                   <CTable bordered hover responsive className="align-middle shadow-sm">
                     <CTableHead color="dark">
                       <CTableRow className="text-center text-white">
                         <CTableHeaderCell>Assy / Part</CTableHeaderCell>
+                        <CTableHeaderCell>Last PRM Status</CTableHeaderCell>
                         <CTableHeaderCell>Current Status</CTableHeaderCell>
+                        <CTableHeaderCell>Last PRE-PRM Status</CTableHeaderCell>
                       </CTableRow>
                     </CTableHead>
                     <CTableBody>
                       {a.parts.map((p, i) => (
                         <CTableRow key={i}>
                           <CTableDataCell>{p.name}</CTableDataCell>
-                          <CTableDataCell>
-                            <CBadge color={statusColor(p.status)}>{p.status}</CBadge>
-                          </CTableDataCell>
+                          <CTableDataCell>{renderStatusDetails(p.lastPrmStatus)}</CTableDataCell>
+                          <CTableDataCell>{renderStatusDetails(p.currentStatus)}</CTableDataCell>
+                          <CTableDataCell>{renderStatusDetails(p.lastPrePrmStatus)}</CTableDataCell>
                         </CTableRow>
                       ))}
                     </CTableBody>
@@ -318,62 +377,17 @@ const ProjectSummaryInner = () => {
             </CCol>
           </CRow>
 
-          {/* ─── Qualification ─── */}
-          <h6 className="fw-bold text-primary border-bottom pb-1 mb-2 tour-qual">
-            Qualification Results
-          </h6>
-          <CTable bordered hover responsive className="align-middle shadow-sm mb-4">
-            <CTableHead color="dark">
-              <CTableRow className="text-center text-white">
-                <CTableHeaderCell>Stage</CTableHeaderCell>
-                <CTableHeaderCell>Result</CTableHeaderCell>
-                <CTableHeaderCell>Remarks</CTableHeaderCell>
-              </CTableRow>
-            </CTableHead>
-            <CTableBody>
-              {summary.qualification.length === 0 ? (
-                <CTableRow>
-                  <CTableDataCell colSpan={3} className="text-center text-body-secondary">
-                    No qualification records available.
-                  </CTableDataCell>
-                </CTableRow>
-              ) : (
-                summary.qualification.map((q, i) => (
-                  <CTableRow key={i}>
-                    <CTableDataCell>{q.stage}</CTableDataCell>
-                    <CTableDataCell>
-                      <CBadge color={statusColor(q.result)}>{q.result}</CBadge>
-                    </CTableDataCell>
-                    <CTableDataCell>{q.remarks}</CTableDataCell>
-                  </CTableRow>
-                ))
-              )}
-            </CTableBody>
-          </CTable>
-
-          {/* ─── Critical Issues ─── */}
-          <h6 className="fw-bold text-danger border-bottom pb-1 mb-2 tour-issues">
-            Critical Issues
-          </h6>
-          {summary.issues.length === 0 ? (
-            <CAlert color="secondary" className="shadow-sm mb-2">
-              No critical issues logged for this project.
-            </CAlert>
-          ) : (
-            summary.issues.map((issue, i) => (
-              <CAlert
-                key={i}
-                color={issue.severity === 'High' ? 'danger' : 'warning'}
-                className="d-flex align-items-center shadow-sm mb-2"
-              >
-                <CIcon icon={cilWarning} className="me-2" />
-                <strong>{issue.title}</strong>
-                <span className="ms-auto small text-light">
-                  Owner: {issue.owner}
-                </span>
-              </CAlert>
-            ))
-          )}
+          <div className="mt-4 border rounded-3 p-3 bg-body-secondary d-flex flex-column flex-md-row gap-3 align-items-stretch discussion-point">
+            <div className="fw-semibold text-uppercase text-body-secondary">Discussion Point</div>
+            <div className="border-start border-2 ps-md-3 flex-grow-1">
+              <div className="small text-body-secondary">
+                PRM No: <span className="fw-semibold">{discussionEntry?.meetingNo || '—'}</span>
+              </div>
+              <div className="fw-semibold mt-2">
+                {discussionEntry?.discussionPoint || 'Discussion point comes here'}
+              </div>
+            </div>
+          </div>
         </CCardBody>
 
         <style>
@@ -398,8 +412,7 @@ const steps = [
   { selector: '.tour-sets', content: 'Each set under the project with current completion percentage.' },
   { selector: '[data-tour="mechanical"]', content: 'Mechanical assemblies and their PRM status.' },
   { selector: '[data-tour="electrical"]', content: 'Electrical assemblies and progress.' },
-  { selector: '.tour-qual', content: 'Qualification results for each subsystem stage.' },
-  { selector: '.tour-issues', content: 'List of critical issues raised by various departments.' },
+  { selector: '.discussion-point', content: 'Latest discussion point tied to the last PRM meeting.' },
 ]
 
 const ProjectSummaryOverview = () => (

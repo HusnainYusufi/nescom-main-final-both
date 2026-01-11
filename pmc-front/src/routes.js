@@ -55,6 +55,8 @@ const AddAssyParts = React.lazy(() => import('./views/pages/production/AddAssyPa
 const AddStatus = React.lazy(() => import('./views/pages/production/AddStatus'))
 const AddStatusPRM = React.lazy(() => import('./views/pages/production/AddStatusPRM'))
 const ProjectSummaryView = React.lazy(() => import('./views/pages/production/ProjectSummaryView'))
+const ProductionReview = React.lazy(() => import('./views/pages/production/ProductionReview'))
+const AllProjectStatus = React.lazy(() => import('./views/pages/production/AllProjectStatus'))
 const ProjectLifecycleWizard = React.lazy(
   () => import('./views/pages/production/ProjectLifecycleWizard'),
 )
@@ -148,6 +150,8 @@ const routes = [
   { path: '/production/add-status', name: 'Add Status', element: AddStatus },
   { path: '/production/add-prm-status', name: 'Add PRM Status', element: AddStatusPRM },
   // { path: '/production/add-critical-issue', name: 'Add Critical Issue', element: AddCriticalIssue },
+  { path: '/production/production-review', name: 'Production Review', element: ProductionReview },
+  { path: '/production/all-project-status', name: 'All Project Status', element: AllProjectStatus },
   { path: '/production/project-summary', name: 'Project Summary', element: ProjectSummaryView },
   {
     path: '/production/project-lifecycle',
