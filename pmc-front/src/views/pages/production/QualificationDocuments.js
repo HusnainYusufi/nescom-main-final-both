@@ -34,6 +34,7 @@ const QualificationDocuments = () => {
     project: '',
     setId: '',
     assemblyId: '',
+    partItem: '',
     partId: '',
     partCode: '',
     documentType: '',
@@ -112,12 +113,32 @@ const QualificationDocuments = () => {
     loadParts()
   }, [form.project, form.assemblyId])
 
-  const handlePartChange = (value) => {
+  const partItemLabel = (part) =>
+    part?.name || part?.code || part?.partId || part?.shortName || 'Part'
+  const partIdLabel = (part) =>
+    part?.code || part?.partId || part?._id || part?.id || 'ID'
+
+  const partItemOptions = useMemo(() => {
+    const deduped = new Map()
+    parts.forEach((part) => {
+      const label = partItemLabel(part)
+      if (!label || deduped.has(label)) return
+      deduped.set(label, part)
+    })
+    return Array.from(deduped.keys())
+  }, [parts])
+
+  const partIdOptions = useMemo(() => {
+    if (!form.partItem) return []
+    return parts.filter((part) => partItemLabel(part) === form.partItem)
+  }, [form.partItem, parts])
+
+  const handlePartIdChange = (value) => {
     const selectedPart = parts.find((part) => (part._id || part.id) === value)
     setForm((prev) => ({
       ...prev,
       partId: value,
-      partCode: selectedPart?.code || selectedPart?.name || prev.partCode,
+      partCode: selectedPart ? partIdLabel(selectedPart) : '',
     }))
   }
 
@@ -125,8 +146,8 @@ const QualificationDocuments = () => {
     event.preventDefault()
     setError('')
     setSuccess('')
-    if (!form.project || !form.setId || !form.assemblyId || !form.partId) {
-      setError('Project, set, assembly, and part are required.')
+    if (!form.project || !form.setId || !form.assemblyId || !form.partItem || !form.partId) {
+      setError('Project, set, assembly, part item, and part ID are required.')
       return
     }
     if (!form.partCode.trim()) {
@@ -162,6 +183,7 @@ const QualificationDocuments = () => {
         project: form.project,
         setId: form.setId,
         assemblyId: form.assemblyId,
+        partItem: '',
         partId: '',
         partCode: '',
         documentType: '',
@@ -206,6 +228,7 @@ const QualificationDocuments = () => {
                           project: e.target.value,
                           setId: '',
                           assemblyId: '',
+                          partItem: '',
                           partId: '',
                           partCode: '',
                         })
@@ -231,6 +254,7 @@ const QualificationDocuments = () => {
                           ...form,
                           setId: e.target.value,
                           assemblyId: '',
+                          partItem: '',
                           partId: '',
                           partCode: '',
                         })
@@ -254,6 +278,7 @@ const QualificationDocuments = () => {
                         setForm({
                           ...form,
                           assemblyId: e.target.value,
+                          partItem: '',
                           partId: '',
                           partCode: '',
                         })
@@ -274,29 +299,46 @@ const QualificationDocuments = () => {
                   </CCol>
                   <CCol md={6}>
                     <CFormSelect
-                      label="Part*"
-                      value={form.partId}
-                      onChange={(e) => handlePartChange(e.target.value)}
+                      label="Part / Item*"
+                      value={form.partItem}
+                      onChange={(e) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          partItem: e.target.value,
+                          partId: '',
+                          partCode: '',
+                        }))
+                      }
                       required
                       disabled={!form.assemblyId || loadingParts}
                     >
                       <option value="">
-                        {loadingParts ? 'Loading parts...' : 'Select part'}
+                        {loadingParts ? 'Loading parts...' : 'Select part item'}
                       </option>
-                      {parts.map((part) => (
-                        <option key={part._id || part.id} value={part._id || part.id}>
-                          {part.name || part.code || 'Part'}
+                      {partItemOptions.map((item) => (
+                        <option key={item} value={item}>
+                          {item}
                         </option>
                       ))}
                     </CFormSelect>
                   </CCol>
                   <CCol md={6}>
-                    <CFormInput
+                    <CFormSelect
                       label="Part ID*"
-                      value={form.partCode}
-                      onChange={(e) => setForm({ ...form, partCode: e.target.value })}
+                      value={form.partId}
+                      onChange={(e) => handlePartIdChange(e.target.value)}
                       required
-                    />
+                      disabled={!form.partItem || loadingParts}
+                    >
+                      <option value="">
+                        {loadingParts ? 'Loading parts...' : 'Select part ID'}
+                      </option>
+                      {partIdOptions.map((part) => (
+                        <option key={part._id || part.id} value={part._id || part.id}>
+                          {partIdLabel(part)}
+                        </option>
+                      ))}
+                    </CFormSelect>
                   </CCol>
                   <CCol md={6}>
                     <CFormSelect

@@ -994,13 +994,13 @@ const ProjectCreationWizard = () => {
                       ))}
                     </CFormSelect>
 
-                    <CRow className="g-3">
+                    <div className="assembly-scroll">
                       {set.assemblies.map((assembly) => {
                         const alreadySaved = existingAssemblyNames.includes(
                           assembly.name?.toLowerCase(),
                         )
                         return (
-                          <CCol md={12} key={assembly.id}>
+                          <div className="assembly-card" key={assembly.id}>
                             <div className="p-3 border rounded-3 bg-body h-100 shadow-sm">
                               <div className="d-flex justify-content-between align-items-start mb-2">
                                 <div>
@@ -1095,18 +1095,16 @@ const ProjectCreationWizard = () => {
                                 </CButton>
                               </div>
                             </div>
-                          </CCol>
+                          </div>
                         )
                       })}
                       {set.assemblies.length === 0 && (
-                        <CCol>
-                          <CAlert color="light" className="text-center mb-0">
-                            No assemblies yet. Select from inventory or add a new one to get
-                            started.
-                          </CAlert>
-                        </CCol>
+                        <CAlert color="light" className="text-center mb-0 w-100">
+                          No assemblies yet. Select from inventory or add a new one to get
+                          started.
+                        </CAlert>
                       )}
-                    </CRow>
+                    </div>
                   </CCol>
                 </CRow>
               </CCardBody>
@@ -1404,9 +1402,21 @@ const ProjectCreationWizard = () => {
           .composition-card .bg-body {
             background: var(--cui-body-bg) !important;
           }
+          .assembly-scroll {
+            display: flex;
+            gap: 1rem;
+            overflow-x: auto;
+            padding-bottom: 0.25rem;
+          }
+          .assembly-card {
+            flex: 0 0 320px;
+          }
           @media (max-width: 767.98px) {
             .wizard-step {
               min-height: auto;
+            }
+            .assembly-card {
+              flex-basis: 260px;
             }
           }
         `}
