@@ -103,10 +103,12 @@ const QualificationTestsOnParts = () => {
 
           const targetSet = grouped[projectId].sets.find((s) => s.id === setId)
           const partId = test.part?._id || test.part || `part-${idx}`
+          const partCode = test.part?.code || test.part?.partId || partId
           let partRef = targetSet.parts.find((p) => p.id === partId)
           if (!partRef) {
             partRef = {
               id: partId,
+              code: partCode,
               revision: test.part?.revision || '—',
               description: test.part?.description || test.part?.name || 'Part',
               remarks: test.remarks || '—',
@@ -276,6 +278,7 @@ const QualificationTestsOnParts = () => {
         if (!partRef) {
           partRef = {
             id: selectedPartId,
+            code: selectedPart?.code || selectedPartId,
             revision: '—',
             description: 'Part',
             remarks: payload.remarks || '—',
@@ -339,11 +342,11 @@ const QualificationTestsOnParts = () => {
                           <CListGroupItem
                             key={part.id}
                             action
-                            active={selectedPartId === part.id}
-                            className="d-flex justify-content-between align-items-center"
-                            onClick={() => togglePart(part.id)}
-                          >
-                            <span>{part.id}</span>
+                          active={selectedPartId === part.id}
+                          className="d-flex justify-content-between align-items-center"
+                          onClick={() => togglePart(part.id)}
+                        >
+                            <span>{part.code || part.id}</span>
                             <CBadge color="warning" className="text-dark">
                               Rev {part.revision}
                             </CBadge>
@@ -377,7 +380,7 @@ const QualificationTestsOnParts = () => {
                     .flatMap((set) => set.parts)
                     .map((part) => (
                       <option key={part.id} value={part.id}>
-                        {part.id} — Rev {part.revision}
+                        {part.code || part.id} — Rev {part.revision}
                       </option>
                     ))}
                 </CFormSelect>
@@ -407,7 +410,11 @@ const QualificationTestsOnParts = () => {
               )}
               <CRow className="g-3 mb-3">
                 <CCol md={6}>
-                  <CFormInput label="Part ID" value={selectedPart?.id || ''} readOnly />
+                  <CFormInput
+                    label="Part ID"
+                    value={selectedPart?.code || selectedPart?.id || ''}
+                    readOnly
+                  />
                 </CCol>
                 <CCol md={6}>
                   <CFormInput label="Part Revision" value={selectedPart?.revision || ''} readOnly />
@@ -439,7 +446,9 @@ const QualificationTestsOnParts = () => {
                           onClick={() => togglePart(part.id)}
                           role="button"
                         >
-                          <CTableDataCell className="fw-semibold">{part.id}</CTableDataCell>
+                          <CTableDataCell className="fw-semibold">
+                            {part.code || part.id}
+                          </CTableDataCell>
                           <CTableDataCell>{part.revision}</CTableDataCell>
                           <CTableDataCell>{part.description}</CTableDataCell>
                           <CTableDataCell>{part.remarks}</CTableDataCell>

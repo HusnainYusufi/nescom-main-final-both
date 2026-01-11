@@ -90,7 +90,9 @@ const AppSidebar = () => {
         children: [
           { label: 'Project Tree', to: '/production/treeview', icon: cilSettings },
           { label: 'Project Review', to: '/production/project-summary', icon: cilChart },
+          { label: 'All Project Status', to: '/production/all-project-status', icon: cilChart },
           { label: 'Timeline & Discussions', to: '/production/timeline', icon: cilClock },
+          { label: 'Production Review', to: '/production/production-review', icon: cilClipboard },
           { label: 'View Assemblies', to: '/production/view-assembly', icon: cilLayers },
           { label: 'View Issues', to: '/production/view-issues', icon: cilWarning },
           { label: 'View Status', to: '/production/view-status', icon: cilClipboard },

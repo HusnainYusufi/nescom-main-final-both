@@ -19,6 +19,10 @@ module.exports.routes = (app) => {
   );
   app.use('/api/set', require('../features/set/controller/SetController'));
   app.use('/api/status-entry', require('../features/status/controller/StatusController'));
+  app.use(
+    '/api/production-review',
+    require('../features/productionReview/controller/ProductionReviewController'),
+  );
   app.use('/api/issue', require('../features/issue/controller/IssueController'));
   app.use('/api/warehouse', require('../features/warehouse/controller/WarehouseController'));
 

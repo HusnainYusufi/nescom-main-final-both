@@ -15,6 +15,7 @@ class StatusRepository {
       .populate('set', 'name')
       .populate('assembly', 'name type')
       .populate('part', 'name code')
+      .populate('meeting', 'meetingNo meetingType meetingDate')
   }
 }
 

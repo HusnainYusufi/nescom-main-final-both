@@ -29,6 +29,7 @@ import { useSelector } from 'react-redux'
 import statusService from '../../../services/statusService'
 import projectService from '../../../services/projectService'
 import partService from '../../../services/partService'
+import productionReviewService from '../../../services/productionReviewService'
 
 const ViewStatus = () => {
   const projects = useSelector((state) => state.projects)
@@ -49,11 +50,15 @@ const ViewStatus = () => {
     partItem: '',
     partId: '',
     status: '',
+    statusType: 'CURRENT',
+    meetingId: '',
     processOwner: '',
     updatedOn: '',
     remarks: '',
   })
   const [parts, setParts] = useState([])
+  const [meetings, setMeetings] = useState([])
+  const [loadingMeetings, setLoadingMeetings] = useState(false)
   const [loadingParts, setLoadingParts] = useState(false)
   const [loadingProjects, setLoadingProjects] = useState(false)
 
@@ -69,6 +74,9 @@ const ViewStatus = () => {
       partId: s.part?._id || s.part || '',
       part: s.part?.name || s.partName || '—',
       status: s.status || '—',
+      statusType: s.statusType || 'CURRENT',
+      meetingId: s.meeting?._id || s.meeting || '',
+      meetingLabel: s.meeting?.meetingNo || '—',
       processOwner: s.processOwner || '—',
       updated: s.updatedOn ? new Date(s.updatedOn).toISOString().slice(0, 10) : '—',
       remarks: s.remarks || '—',
@@ -82,6 +90,11 @@ const ViewStatus = () => {
     'Under Integration',
   ]
   const processOwners = ['MM', 'QC', 'CPS', 'E&I']
+  const statusTypeOptions = [
+    { label: 'PRM', value: 'PRM' },
+    { label: 'PRE-PRM', value: 'PRE-PRM' },
+    { label: 'Current Status', value: 'CURRENT' },
+  ]
 
   const statusBadgeColor = (status = '') => {
     const normalized = status.toLowerCase()
@@ -128,6 +141,22 @@ const ViewStatus = () => {
     load()
   }, [])
 
+  useEffect(() => {
+    const loadMeetings = async () => {
+      setLoadingMeetings(true)
+      try {
+        const data = await productionReviewService.getMeetings()
+        setMeetings(data || [])
+      } catch (err) {
+        setMeetings([])
+        setError(err?.message || 'Unable to load meetings.')
+      } finally {
+        setLoadingMeetings(false)
+      }
+    }
+    loadMeetings()
+  }, [])
+
   const resetForm = () => {
     setForm({
       project: '',
@@ -136,6 +165,8 @@ const ViewStatus = () => {
       partItem: '',
       partId: '',
       status: '',
+      statusType: 'CURRENT',
+      meetingId: '',
       processOwner: '',
       updatedOn: '',
       remarks: '',
@@ -157,6 +188,8 @@ const ViewStatus = () => {
       partItem: row.part === '—' ? '' : row.part,
       partId: row.partId,
       status: row.status,
+      statusType: row.statusType || 'CURRENT',
+      meetingId: row.meetingId || '',
       processOwner: row.processOwner === '—' ? '' : row.processOwner,
       updatedOn: row.updated === '—' ? '' : row.updated,
       remarks: row.remarks === '—' ? '' : row.remarks,
@@ -231,6 +264,16 @@ const ViewStatus = () => {
     return parts.filter((part) => partItemLabel(part) === form.partItem)
   }, [form.partItem, parts])
 
+  const meetingOptions = useMemo(() => {
+    if (form.statusType === 'PRM') {
+      return meetings.filter((meeting) => meeting.meetingType === 'PRM')
+    }
+    if (form.statusType === 'PRE-PRM') {
+      return meetings.filter((meeting) => meeting.meetingType === 'PRE-PRM')
+    }
+    return []
+  }, [form.statusType, meetings])
+
   const handleSave = async (e) => {
     e.preventDefault()
     if (!form.project) {
@@ -249,6 +292,10 @@ const ViewStatus = () => {
       setError('Part ID is required when a part item is selected.')
       return
     }
+    if (['PRM', 'PRE-PRM'].includes(form.statusType) && !form.meetingId) {
+      setError('Meeting is required for PRM/PRE-PRM status.')
+      return
+    }
     setSaving(true)
     setError(null)
     const selectedSet = setOptions.find((set) => (set._id || set.id) === form.setId)
@@ -259,6 +306,8 @@ const ViewStatus = () => {
       assembly: form.assemblyId,
       part: form.partId || undefined,
       status: form.status || undefined,
+      statusType: form.statusType || undefined,
+      meeting: ['PRM', 'PRE-PRM'].includes(form.statusType) ? form.meetingId : undefined,
       processOwner: form.processOwner || undefined,
       remarks: form.remarks || undefined,
       updatedOn: form.updatedOn || undefined,
@@ -298,7 +347,19 @@ const ViewStatus = () => {
 
   const exportCSV = () => {
     const csv = [
-      ['ID', 'Project', 'Set', 'Assembly', 'Part', 'Status', 'Process Owner', 'Last Updated', 'Remarks'],
+      [
+        'ID',
+        'Project',
+        'Set',
+        'Assembly',
+        'Part',
+        'Status',
+        'Status Type',
+        'Meeting',
+        'Process Owner',
+        'Last Updated',
+        'Remarks',
+      ],
       ...filtered.map((s) => [
         s.id,
         s.projectName,
@@ -306,6 +367,8 @@ const ViewStatus = () => {
         s.assemblyName,
         s.part,
         s.status,
+        s.statusType,
+        s.meetingLabel,
         s.processOwner,
         s.updated,
         s.remarks,
@@ -363,6 +426,8 @@ const ViewStatus = () => {
                     <CTableHeaderCell>Assembly</CTableHeaderCell>
                     <CTableHeaderCell>Part</CTableHeaderCell>
                     <CTableHeaderCell>Status</CTableHeaderCell>
+                    <CTableHeaderCell>Status Type</CTableHeaderCell>
+                    <CTableHeaderCell>Meeting</CTableHeaderCell>
                     <CTableHeaderCell>Process Owner</CTableHeaderCell>
                     <CTableHeaderCell>Updated</CTableHeaderCell>
                     <CTableHeaderCell>Remarks</CTableHeaderCell>
@@ -372,7 +437,7 @@ const ViewStatus = () => {
                 <CTableBody>
                   {currentData.length === 0 ? (
                     <CTableRow>
-                      <CTableDataCell colSpan={10} className="text-center text-body-secondary py-4">
+                      <CTableDataCell colSpan={12} className="text-center text-body-secondary py-4">
                         No status entries found.
                       </CTableDataCell>
                     </CTableRow>
@@ -387,6 +452,8 @@ const ViewStatus = () => {
                         <CTableDataCell>
                           <span className={`badge bg-${statusBadgeColor(s.status)}`}>{s.status}</span>
                         </CTableDataCell>
+                        <CTableDataCell>{s.statusType}</CTableDataCell>
+                        <CTableDataCell>{s.meetingLabel}</CTableDataCell>
                         <CTableDataCell>{s.processOwner}</CTableDataCell>
                         <CTableDataCell>{s.updated}</CTableDataCell>
                         <CTableDataCell>{s.remarks}</CTableDataCell>
@@ -555,6 +622,40 @@ const ViewStatus = () => {
                 <option value="">Select status</option>
                 {statusOptions.map((option) => (
                   <option key={option}>{option}</option>
+                ))}
+              </CFormSelect>
+            </div>
+            <div className="mb-3 d-flex gap-2">
+              <CFormSelect
+                label="Status Type*"
+                value={form.statusType}
+                onChange={(e) =>
+                  setForm({ ...form, statusType: e.target.value, meetingId: '' })
+                }
+                required
+              >
+                {statusTypeOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </CFormSelect>
+              <CFormSelect
+                label="Select Meeting"
+                value={form.meetingId}
+                onChange={(e) => setForm({ ...form, meetingId: e.target.value })}
+                disabled={form.statusType === 'CURRENT' || loadingMeetings}
+              >
+                <option value="">
+                  {loadingMeetings ? 'Loading meetings...' : 'Select meeting'}
+                </option>
+                {meetingOptions.map((meeting) => (
+                  <option key={meeting._id || meeting.id} value={meeting._id || meeting.id}>
+                    {meeting.meetingNo} •{' '}
+                    {meeting.meetingDate
+                      ? new Date(meeting.meetingDate).toISOString().slice(0, 10)
+                      : 'No date'}
+                  </option>
                 ))}
               </CFormSelect>
             </div>
