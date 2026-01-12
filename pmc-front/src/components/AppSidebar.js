@@ -93,6 +93,21 @@ const AppSidebar = () => {
           { label: 'All Project Status', to: '/production/all-project-status', icon: cilChart },
           { label: 'Timeline & Discussions', to: '/production/timeline', icon: cilClock },
           { label: 'Production Review', to: '/production/production-review', icon: cilClipboard },
+          {
+            label: 'Add Meeting',
+            to: '/production/production-review?action=add-meeting',
+            icon: cilClipboard,
+          },
+          {
+            label: 'Update Meeting',
+            to: '/production/production-review?action=update-meeting',
+            icon: cilClipboard,
+          },
+          {
+            label: 'Add Discussion Point',
+            to: '/production/production-review?action=add-discussion',
+            icon: cilClipboard,
+          },
           { label: 'View Assemblies', to: '/production/view-assembly', icon: cilLayers },
           { label: 'View Issues', to: '/production/view-issues', icon: cilWarning },
           { label: 'View Status', to: '/production/view-status', icon: cilClipboard },

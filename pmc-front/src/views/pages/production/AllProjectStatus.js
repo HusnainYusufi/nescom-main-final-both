@@ -70,14 +70,23 @@ const AllProjectStatus = () => {
       const meetingId = point.meeting?._id || point.meeting
       if (!projectId || !setId) return
       const meeting = meetingMap.get(meetingId) || point.meeting
-      const meetingDate = meeting?.meetingDate ? new Date(meeting.meetingDate).getTime() : 0
+      const meetingDate = meeting?.meetingDate ? Date.parse(meeting.meetingDate) : 0
+      const meetingTimestamp = Number.isNaN(meetingDate) ? 0 : meetingDate
+      const createdAtRaw = point?.createdAt
+      const createdAtParsed = createdAtRaw ? Date.parse(createdAtRaw) : 0
+      const createdAt = Number.isNaN(createdAtParsed) ? 0 : createdAtParsed
       const key = `${projectId}-${setId}`
       const existing = map.get(key)
-      if (!existing || meetingDate >= existing.meetingDate) {
+      if (
+        !existing ||
+        meetingTimestamp > existing.meetingDate ||
+        (meetingTimestamp === existing.meetingDate && createdAt > existing.createdAt)
+      ) {
         map.set(key, {
           discussionPoint: point.discussionPoint,
           meetingNo: meeting?.meetingNo || point.meeting?.meetingNo || '—',
-          meetingDate,
+          meetingDate: meetingTimestamp,
+          createdAt,
         })
       }
     })
@@ -134,11 +143,15 @@ const AllProjectStatus = () => {
                 </CTableRow>
               ) : (
                 Array.from(projectsByCategory.entries()).map(([category, items]) =>
-                  items.map((project) => {
+                  items.map((project, index) => {
                     const sets = project.sets || []
                     return (
                       <CTableRow key={`${category}-${project._id || project.id}`}>
-                        <CTableDataCell className="fw-semibold">{category}</CTableDataCell>
+                        {index === 0 && (
+                          <CTableDataCell className="fw-semibold" rowSpan={items.length}>
+                            {category}
+                          </CTableDataCell>
+                        )}
                         <CTableDataCell>
                           <div className="fw-semibold">{project.name}</div>
                           <div className="small text-body-secondary">{project.code}</div>
