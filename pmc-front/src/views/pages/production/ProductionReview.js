@@ -19,14 +19,20 @@ import {
   CSpinner,
 } from '@coreui/react'
 import { useDispatch, useSelector } from 'react-redux'
+import { useLocation } from 'react-router-dom'
 import projectService from '../../../services/projectService'
 import productionReviewService from '../../../services/productionReviewService'
 
-const formatDate = (value) =>
-  value ? new Date(value).toISOString().slice(0, 10) : ''
+const formatDate = (value) => {
+  if (!value) return ''
+  const parsed = Date.parse(value)
+  if (Number.isNaN(parsed)) return ''
+  return new Date(parsed).toISOString().slice(0, 10)
+}
 
 const ProductionReview = () => {
   const dispatch = useDispatch()
+  const location = useLocation()
   const projects = useSelector((state) => state.projects)
   const [projectOptions, setProjectOptions] = useState([])
   const [meetings, setMeetings] = useState([])
@@ -49,6 +55,14 @@ const ProductionReview = () => {
   useEffect(() => {
     dispatch({ type: 'set', activeModule: 'production' })
   }, [dispatch])
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search)
+    const action = params.get('action')
+    setShowAddMeeting(action === 'add-meeting')
+    setShowUpdateMeeting(action === 'update-meeting')
+    setShowDiscussion(action === 'add-discussion')
+  }, [location.search])
 
   useEffect(() => {
     const load = async () => {
