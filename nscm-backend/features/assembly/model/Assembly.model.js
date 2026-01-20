@@ -6,6 +6,8 @@ const AssemblySchema = new mongoose.Schema(
     type: { type: String, enum: ['assembly', 'sub-assembly', 'kit'], required: true },
     notes: { type: String },
     parentAssembly: { type: mongoose.Schema.Types.ObjectId, ref: 'Assembly', default: null },
+    // Parts linked to this assembly
+    parts: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Part' }],
     qcReports: [
       {
         title: { type: String, required: true, trim: true },

@@ -14,7 +14,18 @@ class AssemblyRepository {
   }
 
   static async getAll() {
-    return await Assembly.find({}).populate('parentAssembly').exec();
+    return await Assembly.find({}).populate('parentAssembly').populate('parts').exec();
+  }
+
+  static async updateById(id, data) {
+    return await Assembly.findByIdAndUpdate(id, data, { new: true })
+      .populate('parentAssembly')
+      .populate('parts')
+      .exec();
+  }
+
+  static async deleteById(id) {
+    return await Assembly.findByIdAndDelete(id).exec();
   }
 
   static async addQcReport(id, qcReport) {

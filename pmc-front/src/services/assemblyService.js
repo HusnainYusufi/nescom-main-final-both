@@ -9,9 +9,28 @@ const assemblyService = {
     }
     return data.result
   },
+
+  getById: async (id) => {
+    const { data } = await api.get(`/assembly/${id}`)
+    if (!data?.result) throw new Error(data?.message || 'Assembly not found')
+    return data.result
+  },
+
   add: async (payload) => {
     const { data } = await api.post('/assembly/add', payload)
     if (!data?.result) throw new Error(data?.message || 'Failed to create assembly')
+    return data.result
+  },
+
+  update: async (id, payload) => {
+    const { data } = await api.put(`/assembly/${id}`, payload)
+    if (!data?.result) throw new Error(data?.message || 'Failed to update assembly')
+    return data.result
+  },
+
+  delete: async (id) => {
+    const { data } = await api.delete(`/assembly/${id}`)
+    if (!data?.result) throw new Error(data?.message || 'Failed to delete assembly')
     return data.result
   },
 

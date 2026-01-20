@@ -22,11 +22,21 @@ import {
   CToastBody,
   CToaster,
   CTooltip,
+  CTable,
+  CTableBody,
+  CTableDataCell,
+  CTableHead,
+  CTableHeaderCell,
+  CTableRow,
+  CAlert,
+  CSpinner,
 } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
 import { cilInfo, cilPlus, cilWarning } from '@coreui/icons'
 import projectService from '../../services/projectService'
 import assemblyService from '../../services/assemblyService'
+import partService from '../../services/partService'
+import qualificationTestService from '../../services/qualificationTestService'
 
 const ProductionTreeView = () => {
   const dispatch = useDispatch()
@@ -38,6 +48,15 @@ const ProductionTreeView = () => {
   const [showSuccessModal, setShowSuccessModal] = useState(false)
   const [qcDrafts, setQcDrafts] = useState({})
   const [toast, setToast] = useState({ visible: false, message: '', color: 'success' })
+  
+  // Parts table state
+  const [selectedProjectForTable, setSelectedProjectForTable] = useState('')
+  const [selectedSetForTable, setSelectedSetForTable] = useState('')
+  const [partsTableData, setPartsTableData] = useState([])
+  const [qcTests, setQcTests] = useState([])
+  const [partsLoading, setPartsLoading] = useState(false)
+  const [partsError, setPartsError] = useState('')
+  const [partUpdates, setPartUpdates] = useState({}) // Store updates for each part
 
   const formatFileSize = (bytes) => {
     if (!bytes && bytes !== 0) return ''
@@ -79,6 +98,126 @@ const ProductionTreeView = () => {
     loadProjects()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projects.length])
+  
+  // Load QC Tests
+  useEffect(() => {
+    const loadQCTests = async () => {
+      try {
+        const data = await qualificationTestService.getAll()
+        setQcTests(data || [])
+      } catch (err) {
+        console.error('Failed to load QC tests', err)
+      }
+    }
+    loadQCTests()
+  }, [])
+  
+  // Load parts when project and set are selected
+  useEffect(() => {
+    if (!selectedProjectForTable || !selectedSetForTable) {
+      setPartsTableData([])
+      return
+    }
+    const loadParts = async () => {
+      setPartsLoading(true)
+      setPartsError('')
+      try {
+        const parts = await partService.getByProjectAndSet(selectedProjectForTable, selectedSetForTable)
+        setPartsTableData(parts || [])
+      } catch (err) {
+        setPartsError(err?.message || 'Unable to load parts.')
+      } finally {
+        setPartsLoading(false)
+      }
+    }
+    loadParts()
+  }, [selectedProjectForTable, selectedSetForTable])
+  
+  const handlePartQCTestChange = async (partId, qcTestId) => {
+    setPartUpdates((prev) => ({ ...prev, [partId]: { ...prev[partId], qcTestId } }))
+    
+    // Find or create qualification test for this part
+    try {
+      const part = partsTableData.find((p) => (p._id || p.id) === partId)
+      if (!part) return
+      
+      // Check if test already exists
+      const existingTest = qcTests.find((t) => (t.part?._id || t.part) === partId && (t._id || t.id) === qcTestId)
+      if (!existingTest && qcTestId) {
+        // Create new qualification test
+        await qualificationTestService.add({
+          project: selectedProjectForTable,
+          part: partId,
+          title: qcTests.find((t) => (t._id || t.id) === qcTestId)?.title || 'QC Test',
+        })
+      }
+    } catch (err) {
+      console.error('Failed to update QC test', err)
+    }
+  }
+  
+  const handlePartDocumentUpload = async (partId, file) => {
+    if (!file) return
+    
+    try {
+      const uploaded = await qualificationTestService.upload(file)
+      setPartUpdates((prev) => ({
+        ...prev,
+        [partId]: { ...prev[partId], document: uploaded },
+      }))
+      
+      // Update qualification test with document
+      const part = partsTableData.find((p) => (p._id || p.id) === partId)
+      if (part && partUpdates[partId]?.qcTestId) {
+        // Update test with document URL
+        // This would require an update endpoint
+      }
+    } catch (err) {
+      console.error('Failed to upload document', err)
+    }
+  }
+  
+  const handlePartRemarksChange = (partId, remarks) => {
+    setPartUpdates((prev) => ({ ...prev, [partId]: { ...prev[partId], remarks } }))
+  }
+  
+  const savePartUpdates = async (partId) => {
+    const updates = partUpdates[partId]
+    if (!updates) return
+    
+    try {
+      const part = partsTableData.find((p) => (p._id || p.id) === partId)
+      if (!part) return
+      
+      // Find qualification test for this part
+      const test = qcTests.find((t) => (t.part?._id || t.part) === partId)
+      if (test && updates.remarks) {
+        // Update test remarks - would need update endpoint
+        // For now, just update local state
+        setQcTests((prev) =>
+          prev.map((t) =>
+            (t._id || t.id) === (test._id || test.id)
+              ? { ...t, remarks: updates.remarks }
+              : t,
+          ),
+        )
+      }
+      
+      // Remove from updates
+      setPartUpdates((prev) => {
+        const next = { ...prev }
+        delete next[partId]
+        return next
+      })
+    } catch (err) {
+      console.error('Failed to save part updates', err)
+    }
+  }
+  
+  const getSetsForProject = (projectId) => {
+    const project = projects.find((p) => (p._id || p.id) === projectId)
+    return project?.sets || []
+  }
 
   const handleStatusChange = async (projectId, status) => {
     const project = projects.find((p) => p.id === projectId)
@@ -792,12 +931,7 @@ const ProductionTreeView = () => {
       </div>
       <div className="d-flex align-items-center gap-3 flex-wrap">
         <CBadge color="warning" textColor="dark" className="px-3">
-          {typeof project.category === 'object'
-            ? project.category?.name ||
-              project.category?.title ||
-              project.category?._id ||
-              'General'
-            : project.category || 'General'}
+          {project.system || 'General'}
         </CBadge>
         <CFormSelect
           size="sm"
@@ -900,6 +1034,140 @@ const ProductionTreeView = () => {
           </CCard>
         </CCol>
       </CRow>
+      
+      {/* Parts Table Section */}
+      <CRow className="mt-4">
+        <CCol xs={12}>
+          <CCard className="shadow-sm border-0">
+            <CCardHeader className="bg-body-secondary fw-semibold">Project Tree - Parts Table</CCardHeader>
+            <CCardBody>
+              <CRow className="g-3 mb-4">
+                <CCol md={6}>
+                  <CFormSelect
+                    label="Project"
+                    value={selectedProjectForTable}
+                    onChange={(e) => {
+                      setSelectedProjectForTable(e.target.value)
+                      setSelectedSetForTable('')
+                      setPartsTableData([])
+                    }}
+                  >
+                    <option value="">Select Project</option>
+                    {projects.map((project) => (
+                      <option key={project._id || project.id} value={project._id || project.id}>
+                        {project.name} ({project.code})
+                      </option>
+                    ))}
+                  </CFormSelect>
+                </CCol>
+                <CCol md={6}>
+                  <CFormSelect
+                    label="Set"
+                    value={selectedSetForTable}
+                    onChange={(e) => setSelectedSetForTable(e.target.value)}
+                    disabled={!selectedProjectForTable}
+                  >
+                    <option value="">Select Set</option>
+                    {getSetsForProject(selectedProjectForTable).map((set) => (
+                      <option key={set._id || set.id} value={set._id || set.id}>
+                        {set.name}
+                      </option>
+                    ))}
+                  </CFormSelect>
+                </CCol>
+              </CRow>
+              
+              {partsError && (
+                <CAlert color="danger" className="mb-3">
+                  {partsError}
+                </CAlert>
+              )}
+              
+              {partsLoading ? (
+                <div className="text-center py-5">
+                  <CSpinner color="primary" />
+                </div>
+              ) : partsTableData.length > 0 ? (
+                <CTable align="middle" hover responsive>
+                  <CTableHead color="dark">
+                    <CTableRow>
+                      <CTableHeaderCell>Part Name</CTableHeaderCell>
+                      <CTableHeaderCell>Drawing No / Ref Doc. No.</CTableHeaderCell>
+                      <CTableHeaderCell>Part ID No</CTableHeaderCell>
+                      <CTableHeaderCell>QC Test</CTableHeaderCell>
+                      <CTableHeaderCell>Attach Document</CTableHeaderCell>
+                      <CTableHeaderCell>Remarks</CTableHeaderCell>
+                    </CTableRow>
+                  </CTableHead>
+                  <CTableBody>
+                    {partsTableData.map((part) => {
+                      const partId = part._id || part.id
+                      const updates = partUpdates[partId] || {}
+                      const partQCTest = qcTests.find((t) => (t.part?._id || t.part) === partId)
+                      
+                      return (
+                        <CTableRow key={partId}>
+                          <CTableDataCell className="fw-semibold">{part.name}</CTableDataCell>
+                          <CTableDataCell>{part.drawingNo || '—'}</CTableDataCell>
+                          <CTableDataCell>{part.partIdNo || '—'}</CTableDataCell>
+                          <CTableDataCell>
+                            <CFormSelect
+                              size="sm"
+                              value={updates.qcTestId || partQCTest?._id || partQCTest?.id || ''}
+                              onChange={(e) => handlePartQCTestChange(partId, e.target.value)}
+                            >
+                              <option value="">Select QC Test</option>
+                              {qcTests.map((test) => (
+                                <option key={test._id || test.id} value={test._id || test.id}>
+                                  {test.title || test.name || 'QC Test'}
+                                </option>
+                              ))}
+                            </CFormSelect>
+                          </CTableDataCell>
+                          <CTableDataCell>
+                            <CFormInput
+                              type="file"
+                              size="sm"
+                              accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,image/*"
+                              onChange={(e) => {
+                                if (e.target.files && e.target.files[0]) {
+                                  handlePartDocumentUpload(partId, e.target.files[0])
+                                }
+                              }}
+                            />
+                            {updates.document && (
+                              <small className="text-success d-block mt-1">Document attached</small>
+                            )}
+                          </CTableDataCell>
+                          <CTableDataCell>
+                            <CFormInput
+                              type="text"
+                              size="sm"
+                              value={updates.remarks || partQCTest?.remarks || ''}
+                              onChange={(e) => handlePartRemarksChange(partId, e.target.value)}
+                              placeholder="Enter remarks"
+                              onBlur={() => savePartUpdates(partId)}
+                            />
+                          </CTableDataCell>
+                        </CTableRow>
+                      )
+                    })}
+                  </CTableBody>
+                </CTable>
+              ) : selectedProjectForTable && selectedSetForTable ? (
+                <div className="text-center text-body-secondary py-5">
+                  No parts found for selected project and set.
+                </div>
+              ) : (
+                <div className="text-center text-body-secondary py-5">
+                  Please select a project and set to view parts.
+                </div>
+              )}
+            </CCardBody>
+          </CCard>
+        </CCol>
+      </CRow>
+      
       <CModal
         alignment="center"
         visible={showSuccessModal}

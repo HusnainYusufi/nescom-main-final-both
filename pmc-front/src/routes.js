@@ -41,6 +41,8 @@ const QualificationDocuments = React.lazy(
 const ProjectCreationWizard = React.lazy(
   () => import('./views/pages/production/ProjectCreationWizard'),
 )
+const BuildTree = React.lazy(() => import('./views/pages/production/BuildTree'))
+const PartsRegistry = React.lazy(() => import('./views/pages/production/PartsRegistry'))
 const ProjectTimelineBoard = React.lazy(
   () => import('./views/pages/production/ProjectTimelineBoard'),
 )
@@ -101,6 +103,8 @@ const routes = [
   },
   { path: '/production', name: 'Production', element: ProductionHome },
   { path: '/production/treeview', name: 'Production Tree View', element: ProductionTreeView },
+  { path: '/production/build-tree', name: 'Build Tree', element: BuildTree },
+  { path: '/production/parts-registry', name: 'Parts Registry', element: PartsRegistry },
   { path: '/financial/treeview', name: 'Financial Tree View', element: FinancialTreeView },
   {
     path: '/production/configuration-parts',

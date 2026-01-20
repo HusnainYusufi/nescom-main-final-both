@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import {
   CCard,
   CCardHeader,
@@ -20,7 +20,7 @@ import CIcon from '@coreui/icons-react'
 import { cilFactory, cilMediaPlay } from '@coreui/icons'
 import { TourProvider, useTour } from '@reactour/tour'
 import { useDispatch, useSelector } from 'react-redux'
-import { useSearchParams } from 'react-router-dom'
+import { useLocation } from 'react-router-dom'
 import projectService from '../../../services/projectService'
 import statusService from '../../../services/statusService'
 import productionReviewService from '../../../services/productionReviewService'
@@ -30,25 +30,34 @@ const ProjectSummaryInner = () => {
   const dispatch = useDispatch()
   const projects = useSelector((state) => state.projects)
   const activeProjectId = useSelector((state) => state.activeProjectId)
-  const [searchParams] = useSearchParams()
+  const location = useLocation()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [summary, setSummary] = useState(null)
   const [projectsList, setProjectsList] = useState([])
   const [selectedSetId, setSelectedSetId] = useState('all')
 
+  // Parse search params from location (works with HashRouter)
+  const getSearchParam = (key) => {
+    const search = location.search || (location.hash?.includes('?') ? location.hash.split('?')[1] : '')
+    const params = new URLSearchParams(search)
+    return params.get(key)
+  }
+  
+  const setParam = getSearchParam('set')
+  const projectParam = getSearchParam('project')
+
   useEffect(() => {
     dispatch({ type: 'set', activeModule: 'production' })
   }, [dispatch])
 
   useEffect(() => {
-    const setParam = searchParams.get('set')
     if (setParam) {
       setSelectedSetId(setParam)
       return
     }
     setSelectedSetId('all')
-  }, [activeProjectId, searchParams])
+  }, [activeProjectId, setParam])
 
   useEffect(() => {
     const loadSummary = async () => {
@@ -57,10 +66,9 @@ const ProjectSummaryInner = () => {
       try {
         const projectList = projects?.length ? projects : await projectService.getAll()
         setProjectsList(projectList || [])
-        const projectParam = searchParams.get('project')
         const selected =
           projectList.find((p) =>
-            String(p._id || p.id) === String(projectParam || activeProjectId),
+            String(p._id || p.id) === String(projectParam || activeProjectId || ''),
           ) || projectList[0]
         if (!selected) {
           setSummary(null)
@@ -115,7 +123,7 @@ const ProjectSummaryInner = () => {
           return {
             id: setId || set.name || '',
             name: set.name || 'Set',
-            code: set.code || setId || '—',
+            code: set.code || '—',
             completion: Number(set.progress ?? 0),
             currentStatus: entry?.remarks || entry?.status || set.status || 'Draft',
           }
@@ -150,11 +158,13 @@ const ProjectSummaryInner = () => {
             }
             ;(structure.assemblies || []).forEach((assembly) => {
               const asmId = assembly._id || assembly.id || assembly
+              const prmEntry = latestStatusByAssemblyType.get(`${asmId}-PRM`) || null
+              const currentEntry = latestStatusByAssemblyType.get(`${asmId}-CURRENT`) || null
               group.parts.push({
                 name: assembly.name || 'Assembly',
-                lastPrmStatus: latestStatusByAssemblyType.get(`${asmId}-PRM`) || null,
-                currentStatus: latestStatusByAssemblyType.get(`${asmId}-CURRENT`) || null,
-                lastPrePrmStatus: latestStatusByAssemblyType.get(`${asmId}-PRE-PRM`) || null,
+                prmEcd: prmEntry?.meeting?.meetingDate || prmEntry?.updatedOn || null,
+                currentStatus: currentEntry?.status || currentEntry?.remarks || 'Draft',
+                revisedEcd: currentEntry?.revisedEcd || currentEntry?.updatedOn || null,
               })
             })
             if (group.parts.length) assemblies.push(group)
@@ -164,8 +174,8 @@ const ProjectSummaryInner = () => {
         setSummary({
           project: {
             name: selected.name || 'Project',
-            code: selected.code || selected._id || '—',
-            manager: selected.owner || selected.manager || '—',
+            code: selected.code || '—',
+            manager: selected.owner || selected.manager || 'Program Office',
             priority: selected.priority || 'Standard',
           },
           sets,
@@ -181,7 +191,7 @@ const ProjectSummaryInner = () => {
     }
 
     loadSummary()
-  }, [activeProjectId, dispatch, projects, searchParams])
+  }, [activeProjectId, dispatch, projects, projectParam])
 
   useEffect(() => {
     if (!summary || selectedSetId === 'all') return
@@ -200,37 +210,28 @@ const ProjectSummaryInner = () => {
     selectedSetId && selectedSetId !== 'all'
       ? summary.assemblies.filter((group) => String(group.setId) === String(selectedSetId))
       : summary.assemblies
+
   const statusColor = (status = '') => {
-    const normalized = status.toLowerCase()
-    if (normalized.includes('integration') || normalized.includes('complete')) return 'success'
-    if (normalized.includes('casting')) return 'primary'
-    if (normalized.includes('qc')) return 'info'
-    if (normalized.includes('maintenance') || normalized.includes('ablative')) return 'warning'
-    if (normalized.includes('testing') || normalized.includes('fabrication')) return 'warning'
+    const normalized = String(status).toLowerCase()
+    if (normalized.includes('delivered') || normalized.includes('complete')) return 'success'
+    if (normalized.includes('available') || normalized.includes('integration')) return 'info'
+    if (normalized.includes('casting') || normalized.includes('fabrication')) return 'primary'
+    if (normalized.includes('testing') || normalized.includes('qc')) return 'warning'
     return 'secondary'
   }
 
-  const formatDate = (value) => (value ? new Date(value).toISOString().slice(0, 10) : '—')
-
-  const renderStatusDetails = (entry) => {
-    if (!entry) return <span className="text-body-secondary">—</span>
-    const statusText = entry?.remarks || entry?.status || '—'
-    const dateValue = entry.meeting?.meetingDate || entry.updatedOn
-    return (
-      <div className="d-flex flex-column gap-1">
-        <CBadge color={statusColor(entry.status || statusText)}>{entry.status || statusText}</CBadge>
-        {entry.meeting?.meetingNo && (
-          <div className="small text-body-secondary">{entry.meeting.meetingNo}</div>
-        )}
-        {dateValue && (
-          <div className="small text-body-secondary">ECD: {formatDate(dateValue)}</div>
-        )}
-        {entry.remarks && <div className="small">{entry.remarks}</div>}
-      </div>
-    )
+  const formatDate = (value) => {
+    if (!value) return ''
+    const d = new Date(value)
+    const day = String(d.getDate()).padStart(2, '0')
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    const month = months[d.getMonth()]
+    const year = String(d.getFullYear()).slice(-2)
+    return `${day} ${month}, ${year}`
   }
 
-  const discussionEntry = useMemo(() => {
+  // Compute discussion entry
+  const discussionEntry = (() => {
     if (!summary?.discussionBySet) return null
     if (selectedSetId && selectedSetId !== 'all') {
       return summary.discussionBySet.get(selectedSetId) || null
@@ -238,103 +239,99 @@ const ProjectSummaryInner = () => {
     const firstSet = summary.sets?.[0]
     if (!firstSet) return null
     return summary.discussionBySet.get(firstSet.id) || null
-  }, [summary, selectedSetId])
+  })()
 
   return (
     <>
-      {/* ─── Header ─── */}
       <CCard className="border-0 shadow-sm fade-in">
-        <CCardHeader className="bg-dark text-white d-flex justify-content-between align-items-center rounded-top" data-tour="header">
-          <div>
-            <h5 className="fw-bold mb-0">
-              <CIcon icon={cilFactory} className="me-2" />
-              {project.name}
-            </h5>
-            <div className="small text-light opacity-75">
-              Code: {project.code} • Manager: {project.manager} • Priority:{' '}
-              <CBadge color="danger">{project.priority}</CBadge>
+        {/* Header with project info and inline dropdowns */}
+        <CCardHeader className="bg-dark text-white rounded-top py-2" data-tour="header">
+          <div className="d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <div>
+              <h5 className="fw-bold mb-0">
+                <CIcon icon={cilFactory} className="me-2" />
+                {project.name}
+              </h5>
+              <div className="small text-light opacity-75">
+                Code: {project.code} • Manager: {project.manager} • Priority:{' '}
+                <CBadge color="danger">{project.priority}</CBadge>
+              </div>
             </div>
-          </div>
-          <CButton color="success" variant="outline" className="rounded-pill fw-semibold" onClick={() => setIsOpen(true)}>
-            <CIcon icon={cilMediaPlay} className="me-2" />
-            Start Project Tour
-          </CButton>
-        </CCardHeader>
-
-        <CCardBody className="pb-4">
-          {error && (
-            <CAlert color="danger" className="mb-3">
-              {error}
-            </CAlert>
-          )}
-          {loading && (
-            <CAlert color="info" className="mb-3">
-              Loading project review...
-            </CAlert>
-          )}
-          <CRow className="g-3 mb-3 tour-filters">
-            <CCol md={6}>
+            <div className="d-flex align-items-center gap-2 flex-wrap tour-filters">
               <CFormSelect
-                label="Select Project"
+                size="sm"
                 value={activeProjectId || ''}
-                onChange={(event) =>
-                  dispatch({ type: 'setActiveProject', projectId: event.target.value })
-                }
+                onChange={(e) => dispatch({ type: 'setActiveProject', projectId: e.target.value })}
+                style={{ minWidth: '140px' }}
               >
-                <option value="">Select project</option>
-                {projectsList.map((projectItem) => (
-                  <option key={projectItem._id || projectItem.id} value={projectItem._id || projectItem.id}>
-                    {projectItem.name || projectItem.code || 'Project'}
+                <option value="">Select Project</option>
+                {projectsList.map((p) => (
+                  <option key={p._id || p.id} value={p._id || p.id}>
+                    {p.name || p.code || 'Project'}
                   </option>
                 ))}
               </CFormSelect>
-            </CCol>
-            <CCol md={6}>
               <CFormSelect
-                label="Select Set"
+                size="sm"
                 value={selectedSetId}
-                onChange={(event) => setSelectedSetId(event.target.value)}
+                onChange={(e) => setSelectedSetId(e.target.value)}
                 disabled={!summary.sets.length}
+                style={{ minWidth: '120px' }}
               >
-                <option value="all">All sets</option>
+                <option value="all">Select Set</option>
                 {summary.sets.map((set) => (
                   <option key={set.id} value={set.id}>
                     {set.name}
                   </option>
                 ))}
               </CFormSelect>
-            </CCol>
-          </CRow>
+              <CButton
+                color="success"
+                variant="outline"
+                size="sm"
+                className="rounded-pill fw-semibold"
+                onClick={() => setIsOpen(true)}
+              >
+                <CIcon icon={cilMediaPlay} className="me-1" />
+                Start Tour
+              </CButton>
+            </div>
+          </div>
+        </CCardHeader>
 
-          <CRow className="g-4">
-            <CCol lg={4}>
-              <h6 className="fw-bold text-info border-bottom pb-1 mb-2 tour-sets">
+        <CCardBody className="p-3">
+          {error && <CAlert color="danger" className="mb-3">{error}</CAlert>}
+          {loading && <CAlert color="info" className="mb-3">Loading project review...</CAlert>}
+
+          {/* Side-by-side layout: Project Sets (left) | Structure Tables (right) */}
+          <CRow className="g-3">
+            {/* Left Column: Project Sets */}
+            <CCol lg={3}>
+              <h6 className="fw-bold text-primary border-bottom pb-1 mb-2 tour-sets">
                 Project Sets
               </h6>
-              <CTable bordered hover responsive className="align-middle shadow-sm mb-4">
-                <CTableHead color="dark">
-                  <CTableRow className="text-white text-center">
+              <CTable bordered hover responsive size="sm" className="align-middle shadow-sm mb-0">
+                <CTableHead className="table-dark">
+                  <CTableRow className="text-center">
                     <CTableHeaderCell>Set Name</CTableHeaderCell>
                     <CTableHeaderCell>Code</CTableHeaderCell>
-                    <CTableHeaderCell>Completion %</CTableHeaderCell>
-                    <CTableHeaderCell>Current Status</CTableHeaderCell>
+                    <CTableHeaderCell>%</CTableHeaderCell>
+                    <CTableHeaderCell>Status</CTableHeaderCell>
                   </CTableRow>
                 </CTableHead>
                 <CTableBody>
                   {visibleSets.map((set, i) => (
                     <CTableRow key={i}>
-                      <CTableDataCell>{set.name}</CTableDataCell>
-                      <CTableDataCell>{set.code}</CTableDataCell>
-                      <CTableDataCell>
+                      <CTableDataCell className="fw-medium">{set.name}</CTableDataCell>
+                      <CTableDataCell className="text-center">{set.code}</CTableDataCell>
+                      <CTableDataCell className="text-center">
                         <CBadge
-                          color={
-                            set.completion > 80 ? 'success' : set.completion > 60 ? 'info' : 'warning'
-                          }
+                          color={set.completion > 80 ? 'success' : set.completion > 50 ? 'info' : 'warning'}
                         >
                           {set.completion}%
                         </CBadge>
                       </CTableDataCell>
-                      <CTableDataCell>
+                      <CTableDataCell className="text-center">
                         <CBadge color={statusColor(set.currentStatus)}>{set.currentStatus}</CBadge>
                       </CTableDataCell>
                     </CTableRow>
@@ -343,57 +340,73 @@ const ProjectSummaryInner = () => {
               </CTable>
             </CCol>
 
-            <CCol lg={8}>
-              {visibleAssemblies.map((a, index) => (
-                <div key={index} className="mb-4">
-                  <h6
-                    className="fw-bold text-info border-bottom pb-1 mb-2"
-                    data-tour={a.type.toLowerCase()}
-                  >
-                    {a.type}
-                  </h6>
-                  <CTable bordered hover responsive className="align-middle shadow-sm">
-                    <CTableHead color="dark">
-                      <CTableRow className="text-center text-white">
-                        <CTableHeaderCell>Assy / Part</CTableHeaderCell>
-                        <CTableHeaderCell>Last PRM Status</CTableHeaderCell>
-                        <CTableHeaderCell>Current Status</CTableHeaderCell>
-                        <CTableHeaderCell>Last PRE-PRM Status</CTableHeaderCell>
-                      </CTableRow>
-                    </CTableHead>
-                    <CTableBody>
-                      {a.parts.map((p, i) => (
-                        <CTableRow key={i}>
-                          <CTableDataCell>{p.name}</CTableDataCell>
-                          <CTableDataCell>{renderStatusDetails(p.lastPrmStatus)}</CTableDataCell>
-                          <CTableDataCell>{renderStatusDetails(p.currentStatus)}</CTableDataCell>
-                          <CTableDataCell>{renderStatusDetails(p.lastPrePrmStatus)}</CTableDataCell>
+            {/* Right Column: Structure Tables */}
+            <CCol lg={9}>
+              {visibleAssemblies.length === 0 ? (
+                <div className="text-muted text-center py-4">No assemblies found for this selection.</div>
+              ) : (
+                visibleAssemblies.map((group, index) => (
+                  <div key={index} className="mb-3">
+                    <h6
+                      className="fw-bold text-success border-bottom pb-1 mb-2"
+                      data-tour={group.type.toLowerCase().replace(/\s+/g, '-')}
+                    >
+                      {group.type}
+                    </h6>
+                    <CTable bordered hover responsive size="sm" className="align-middle shadow-sm mb-0">
+                      <CTableHead className="table-dark">
+                        <CTableRow className="text-center">
+                          <CTableHeaderCell style={{ width: '30%' }}>Assy / Part</CTableHeaderCell>
+                          <CTableHeaderCell style={{ width: '20%' }}>PRM-95 ECD</CTableHeaderCell>
+                          <CTableHeaderCell style={{ width: '30%' }}>Current Status</CTableHeaderCell>
+                          <CTableHeaderCell style={{ width: '20%' }}>Revised ECD</CTableHeaderCell>
                         </CTableRow>
-                      ))}
-                    </CTableBody>
-                  </CTable>
-                </div>
-              ))}
+                      </CTableHead>
+                      <CTableBody>
+                        {group.parts.map((part, i) => (
+                          <CTableRow key={i}>
+                            <CTableDataCell className="fw-medium">{part.name}</CTableDataCell>
+                            <CTableDataCell className="text-center text-muted small">
+                              {formatDate(part.prmEcd) || '—'}
+                            </CTableDataCell>
+                            <CTableDataCell className="text-center">
+                              <CBadge color={statusColor(part.currentStatus)}>
+                                {part.currentStatus}
+                              </CBadge>
+                            </CTableDataCell>
+                            <CTableDataCell className="text-center text-muted small">
+                              {formatDate(part.revisedEcd) || '—'}
+                            </CTableDataCell>
+                          </CTableRow>
+                        ))}
+                      </CTableBody>
+                    </CTable>
+                  </div>
+                ))
+              )}
             </CCol>
           </CRow>
 
-          <div className="mt-4 border rounded-3 p-3 bg-body-secondary d-flex flex-column flex-md-row gap-3 align-items-stretch discussion-point">
-            <div className="fw-semibold text-uppercase text-body-secondary">Discussion Point</div>
-            <div className="border-start border-2 ps-md-3 flex-grow-1">
-              <div className="small text-body-secondary">
-                PRM No: <span className="fw-semibold">{discussionEntry?.meetingNo || '—'}</span>
-              </div>
-              <div className="fw-semibold mt-2">
-                {discussionEntry?.discussionPoint || 'Discussion point comes here'}
-              </div>
+          {/* Discussion Point Section */}
+          <div className="mt-3 border rounded p-2 bg-warning bg-opacity-10 d-flex align-items-start gap-3 discussion-point">
+            <div className="fw-bold text-warning" style={{ minWidth: '120px' }}>
+              Discussion Point
+            </div>
+            <div className="flex-grow-1">
+              <span className="text-muted small me-2">
+                PRM No: <strong>{discussionEntry?.meetingNo || '—'}</strong>
+              </span>
+              <span className="fw-medium">
+                {discussionEntry?.discussionPoint || 'No discussion points available.'}
+              </span>
             </div>
           </div>
         </CCardBody>
 
         <style>
           {`
-          .fade-in { animation: fadeIn 0.4s ease-in-out; }
-          @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+          .fade-in { animation: fadeIn 0.3s ease-in-out; }
+          @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
           [data-tour-elem='highlighted'] {
             box-shadow: 0 0 0 3px #0d6efd, 0 0 20px #0d6efd88;
             border-radius: 8px;
@@ -405,14 +418,13 @@ const ProjectSummaryInner = () => {
   )
 }
 
-// ─── Guided Tour Steps ───
+// Guided Tour Steps
 const steps = [
-  { selector: '[data-tour="header"]', content: 'Project header with key info and tour start button.' },
-  { selector: '.tour-filters', content: 'Pick a project and optionally filter to a set.' },
-  { selector: '.tour-sets', content: 'Each set under the project with current completion percentage.' },
-  { selector: '[data-tour="mechanical"]', content: 'Mechanical assemblies and their PRM status.' },
-  { selector: '[data-tour="electrical"]', content: 'Electrical assemblies and progress.' },
-  { selector: '.discussion-point', content: 'Latest discussion point tied to the last PRM meeting.' },
+  { selector: '[data-tour="header"]', content: 'Project header with info and filters.' },
+  { selector: '.tour-filters', content: 'Select project and set to filter the view.' },
+  { selector: '.tour-sets', content: 'Project sets with completion status.' },
+  { selector: '[data-tour="mechanical-structure"]', content: 'Mechanical structure assemblies.' },
+  { selector: '.discussion-point', content: 'Latest discussion point from PRM meeting.' },
 ]
 
 const ProjectSummaryOverview = () => (

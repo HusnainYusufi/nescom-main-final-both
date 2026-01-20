@@ -74,8 +74,11 @@ class UserService {
     }
 
     static async getUserByEmailOrUsername(identifier) {
+        if (!identifier) return null;
+        // Try email first (case-insensitive)
         const byEmail = await UserRepo.getByEmail(identifier);
         if (byEmail) return byEmail;
+        // Then try username (case-sensitive)
         return await UserRepo.getByUsername(identifier);
     }
 

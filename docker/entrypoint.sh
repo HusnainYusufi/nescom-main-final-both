@@ -8,7 +8,7 @@ mongod --dbpath "${MONGO_DATA:-/data/db}" --bind_ip_all --fork --logpath /var/lo
 # Start Redis
 redis-server --daemonize yes
 
-# Seed admin user (idempotent; uses env vars provided in docker-compose)
+# Seed admin user only (idempotent; uses env vars provided in docker-compose)
 node /app/nscm-backend/scripts/seedAdmin.js
 
 # Start backend

@@ -25,19 +25,18 @@ import {
   CRow,
   CSpinner,
 } from '@coreui/react'
+import CIcon from '@coreui/icons-react'
+import { cilChevronLeft, cilChevronRight } from '@coreui/icons'
 import projectService from '../../../services/projectService'
-import projectCategoryService from '../../../services/projectCategoryService'
 import assemblyService from '../../../services/assemblyService'
 import structureService from '../../../services/structureService'
+import partService from '../../../services/partService'
 
 const ProjectCreationWizard = () => {
   const dispatch = useDispatch()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const existingProjects = useSelector((state) => state.projects)
-  const [categories, setCategories] = useState([])
-  const [categoryInput, setCategoryInput] = useState('')
-  const [showCategorySuggestions, setShowCategorySuggestions] = useState(false)
   const [backendProjects, setBackendProjects] = useState([])
   const [loadingInit, setLoadingInit] = useState(false)
   const [submitError, setSubmitError] = useState('')
@@ -65,21 +64,21 @@ const ProjectCreationWizard = () => {
 
   const steps = useMemo(
     () => [
-      { key: 'basics', title: 'Project details', summary: 'Name, code, category, and type' },
+      { key: 'basics', title: 'Select Project', summary: 'Choose from defined projects or create new' },
       {
         key: 'sets',
-        title: 'Sets & templates',
-        summary: 'Add sets or import from existing projects',
+        title: 'Select Sets',
+        summary: 'Choose sets from predefined templates',
       },
       {
         key: 'structures',
-        title: 'Structures & assemblies',
-        summary: 'Capture structures and assemblies per set',
+        title: 'Link Parts & Assemblies',
+        summary: 'Select parts and link to assemblies',
       },
       {
         key: 'review',
-        title: 'Review & create',
-        summary: 'Confirm details before creating the project',
+        title: 'Review & Create',
+        summary: 'Confirm selections before creating',
       },
     ],
     [],
@@ -87,12 +86,14 @@ const ProjectCreationWizard = () => {
 
   const [currentStep, setCurrentStep] = useState(0)
   const [projectForm, setProjectForm] = useState({
+    selectedProjectTemplate: '', // Selected from General tab's "Define Project"
     name: '',
     code: '',
-    category: '',
-    projectType: '',
+    system: '',
+    configuration: '',
     visibility: true,
     description: '',
+    useTemplate: false, // Whether to use a template or create new
   })
   const [sets, setSets] = useState([
     {
@@ -105,6 +106,7 @@ const ProjectCreationWizard = () => {
     },
   ])
   const [assemblyInventory, setAssemblyInventory] = useState([])
+  const [partsRegistry, setPartsRegistry] = useState([])
   const [selectedProjectId, setSelectedProjectId] = useState('')
   const [alert, setAlert] = useState('')
   const [errors, setErrors] = useState({})
@@ -112,35 +114,109 @@ const ProjectCreationWizard = () => {
   const [showCreateConfirmation, setShowCreateConfirmation] = useState(false)
   const [editingProjectId, setEditingProjectId] = useState('')
   const isEditing = Boolean(editingProjectId)
+  
+  // Carousel state for sets
+  const [currentSetIndex, setCurrentSetIndex] = useState(0)
+  
+  // LocalStorage items from General tab
+  const [localStorageItems, setLocalStorageItems] = useState({
+    setups: [],
+    parts: [],
+    partCategories: [],
+    partTypes: [],
+    qcTests: [],
+  })
 
+  // Load all data once on mount
   useEffect(() => {
-    const loadInitial = async () => {
-      setLoadingInit(true)
+    let mounted = true
+    
+    const loadStoredItems = (key) => {
       try {
-        const [cats, projects] = await Promise.all([
-          projectCategoryService.getAll().catch(() => []),
-          projectService.getAll().catch(() => []),
-        ])
-        setCategories(cats || [])
-        if (cats?.length && projectForm.category) {
-          const selected = cats.find((c) => c._id === projectForm.category)
-          if (selected) setCategoryInput(selected.name || selected.title || '')
-        }
-        setBackendProjects(projects || [])
-      } catch (err) {
-        setAlert(err?.message || 'Unable to load categories or projects for the wizard.')
-      } finally {
-        setLoadingInit(false)
+        const stored = localStorage.getItem(key)
+        return stored ? JSON.parse(stored) : []
+      } catch {
+        return []
       }
     }
-    loadInitial()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+    
+    const loadAll = async () => {
+      setLoadingInit(true)
+      
+      // Load localStorage items
+      const storedSetups = loadStoredItems('setups')
+      const storedParts = loadStoredItems('parts')
+      const storedPartCategories = loadStoredItems('partCategories')
+      const storedPartTypes = loadStoredItems('partTypes')
+      const storedQcTests = loadStoredItems('qcTests')
+      
+      if (mounted) {
+        setLocalStorageItems({
+          setups: storedSetups,
+          parts: storedParts,
+          partCategories: storedPartCategories,
+          partTypes: storedPartTypes,
+          qcTests: storedQcTests,
+        })
+      }
+      
+      // Load backend data
+      try {
+        const [projects, parts] = await Promise.all([
+          projectService.getAll().catch(() => []),
+          partService.getAll().catch(() => []),
+        ])
+        
+        if (!mounted) return
+        
+        setBackendProjects(projects || [])
+        
+        // Combine backend parts with localStorage parts
+        const combinedParts = [
+          ...(parts || []),
+          ...storedParts.map((lp) => ({
+            _id: lp.id,
+            id: lp.id,
+            name: lp.partName || lp.name,
+            code: lp.shortName || lp.partIdNo || '',
+            partType: lp.partType || 'Mechanical',
+            drawingNo: lp.drawingNo || '',
+            partIdNo: lp.partIdNo || '',
+            revisionNo: lp.revisionNo || '',
+            category: lp.partCategory || '',
+            isLocalStorage: true,
+          })),
+        ]
+        setPartsRegistry(combinedParts)
+      } catch (err) {
+        if (mounted) {
+          setAlert(err?.message || 'Unable to load data for the wizard.')
+        }
+      } finally {
+        if (mounted) {
+          setLoadingInit(false)
+        }
+      }
+    }
+    
+    loadAll()
+    
+    return () => {
+      mounted = false
+    }
+  }, []) // Only run once on mount
 
   useEffect(() => {
     const editId = searchParams.get('edit')
     setEditingProjectId(editId || '')
   }, [searchParams])
+
+  // Sync carousel index when sets change
+  useEffect(() => {
+    if (sets.length > 0 && currentSetIndex >= sets.length) {
+      setCurrentSetIndex(Math.max(0, sets.length - 1))
+    }
+  }, [sets.length, currentSetIndex])
 
   const formatAssemblyType = useCallback((type) => {
     const normalized = (type || '').toLowerCase()
@@ -177,22 +253,17 @@ const ProjectCreationWizard = () => {
     )
     if (!project) return
 
-    const categoryId =
-      typeof project.category === 'object' ? project.category?._id : project.category
-    const categoryLabel =
-      typeof project.category === 'object'
-        ? project.category?.name || project.category?.title || ''
-        : project.category || ''
+    const systemValue = project.system || ''
+    const configurationValue = project.configuration || project.type || ''
 
     setProjectForm({
       name: project.name || '',
       code: project.code || '',
-      category: categoryId || '',
-      projectType: project.type || '',
+      system: systemValue,
+      configuration: configurationValue,
       visibility: true,
       description: project.shortDescription || project.description || '',
     })
-    setCategoryInput(categoryLabel)
 
     const normalizedSets =
       project.sets?.map((set, setIdx) => ({
@@ -234,62 +305,54 @@ const ProjectCreationWizard = () => {
     setSets((prev) => prev.map((set) => (set.id === setId ? { ...set, [field]: value } : set)))
   }
 
-  const handleCategoryInput = (value) => {
-    setCategoryInput(value)
-    const match = categories.find(
-      (cat) => (cat.name || cat.title || '').toLowerCase() === value.toLowerCase(),
-    )
-    setProjectForm((prev) => ({ ...prev, category: match?._id || '' }))
-    setErrors((prev) => ({ ...prev, category: '' }))
-  }
-
-  const filteredCategoryOptions = useMemo(() => {
-    if (!categoryInput.trim()) return categories
-    const query = categoryInput.toLowerCase()
-    return categories.filter((cat) => (cat.name || cat.title || '').toLowerCase().includes(query))
-  }, [categories, categoryInput])
-
-  const ensureCategory = async () => {
-    const name = categoryInput.trim()
-    if (!name) {
-      setProjectForm((prev) => ({ ...prev, category: '' }))
-      return ''
-    }
-    const existing = categories.find(
-      (cat) => (cat.name || cat.title || '').toLowerCase() === name.toLowerCase(),
-    )
-    if (existing) {
-      setProjectForm((prev) => ({ ...prev, category: existing._id }))
-      return existing._id
-    }
-    const created = await projectCategoryService.add({ name })
-    const normalized = {
-      _id: created._id || created.id,
-      name: created.name || name,
-      description: created.description || '',
-    }
-    setCategories((prev) => [normalized, ...prev])
-    setProjectForm((prev) => ({ ...prev, category: normalized._id }))
-    return normalized._id
-  }
 
   const addSet = () => {
     const newId = `set-${Date.now()}`
-    setSets((prev) => [
-      ...prev,
-      {
-        id: newId,
-        backendId: null,
-        name: `Set ${prev.length + 1}`,
-        description: '',
-        structures: [],
-        assemblies: [],
-      },
-    ])
+    const newSet = {
+      id: newId,
+      backendId: null,
+      name: `Set ${sets.length + 1}`,
+      description: '',
+      structures: [],
+      assemblies: [],
+    }
+    setSets((prev) => [...prev, newSet])
+    // Navigate to the newly added set
+    setCurrentSetIndex(sets.length)
+  }
+
+  const goToSet = (index) => {
+    if (index >= 0 && index < sets.length) {
+      setCurrentSetIndex(index)
+    }
+  }
+
+  const nextSet = () => {
+    if (currentSetIndex < sets.length - 1) {
+      setCurrentSetIndex(currentSetIndex + 1)
+    }
+  }
+
+  const prevSet = () => {
+    if (currentSetIndex > 0) {
+      setCurrentSetIndex(currentSetIndex - 1)
+    }
   }
 
   const removeSet = (setId) => {
-    setSets((prev) => prev.filter((set) => set.id !== setId))
+    setSets((prev) => {
+      const filtered = prev.filter((set) => set.id !== setId)
+      // Adjust current index if needed
+      const removedIndex = prev.findIndex((set) => set.id === setId)
+      if (removedIndex !== -1) {
+        if (currentSetIndex >= filtered.length) {
+          setCurrentSetIndex(Math.max(0, filtered.length - 1))
+        } else if (removedIndex <= currentSetIndex) {
+          setCurrentSetIndex(Math.max(0, currentSetIndex - 1))
+        }
+      }
+      return filtered
+    })
   }
 
   const mergeCreatedProjectWithForm = (createdProject) => {
@@ -364,8 +427,49 @@ const ProjectCreationWizard = () => {
                   source: 'Local',
                   saved: false,
                   backendId: null,
+                  linkedPartIds: [],
                 },
               ],
+            }
+          : set,
+      ),
+    )
+  }
+
+  const linkPartToAssembly = (setId, assemblyId, partId) => {
+    setSets((prev) =>
+      prev.map((set) =>
+        set.id === setId
+          ? {
+              ...set,
+              assemblies: set.assemblies.map((assembly) =>
+                assembly.id === assemblyId
+                  ? {
+                      ...assembly,
+                      linkedPartIds: [...(assembly.linkedPartIds || []), partId],
+                    }
+                  : assembly,
+              ),
+            }
+          : set,
+      ),
+    )
+  }
+
+  const unlinkPartFromAssembly = (setId, assemblyId, partId) => {
+    setSets((prev) =>
+      prev.map((set) =>
+        set.id === setId
+          ? {
+              ...set,
+              assemblies: set.assemblies.map((assembly) =>
+                assembly.id === assemblyId
+                  ? {
+                      ...assembly,
+                      linkedPartIds: (assembly.linkedPartIds || []).filter((id) => id !== partId),
+                    }
+                  : assembly,
+              ),
             }
           : set,
       ),
@@ -483,10 +587,16 @@ const ProjectCreationWizard = () => {
         description: asm?.notes || `Imported from ${templateProject.name}`,
         source: 'Imported',
         saved: true,
+        linkedPartIds: [],
       })),
     }))
 
-    setSets((prev) => [...prev, ...importedSets])
+    setSets((prev) => {
+      const updated = [...prev, ...importedSets]
+      // Navigate to the first imported set
+      setCurrentSetIndex(prev.length)
+      return updated
+    })
     setAlert(
       `Imported ${importedSets.length} set(s) from ${templateProject.name} and appended to existing sets.`,
     )
@@ -494,10 +604,20 @@ const ProjectCreationWizard = () => {
 
   const validateBasics = () => {
     const nextErrors = {}
-    if (!projectForm.name.trim()) nextErrors.name = 'Project name is required'
-    if (!projectForm.code.trim()) nextErrors.code = 'Project code is required'
-    if (!projectForm.category) nextErrors.category = 'Select a category'
-    if (!projectForm.projectType) nextErrors.projectType = 'Choose Special or Conventional'
+    
+    // If using a template, only validate that a template is selected
+    if (projectForm.useTemplate) {
+      if (!projectForm.selectedProjectTemplate) {
+        nextErrors.selectedProjectTemplate = 'Please select a project template'
+      }
+    } else {
+      // If creating new, validate all fields
+      if (!projectForm.name.trim()) nextErrors.name = 'Project name is required'
+      if (!projectForm.code.trim()) nextErrors.code = 'Project code is required'
+      if (!projectForm.system) nextErrors.system = 'Select a System'
+      if (!projectForm.configuration) nextErrors.configuration = 'Choose Special or Conventional'
+    }
+    
     setErrors(nextErrors)
     return Object.keys(nextErrors).length === 0
   }
@@ -525,14 +645,10 @@ const ProjectCreationWizard = () => {
 
     setSubmitting(true)
     try {
-      // Ensure category exists/selected
-      let categoryId = projectForm.category
-      if (!categoryId) {
-        categoryId = await ensureCategory()
-      }
-      if (!categoryId) {
-        setErrors((prev) => ({ ...prev, category: 'Select or create a category' }))
-        throw new Error('Category is required')
+      // Validate system is selected
+      if (!projectForm.system) {
+        setErrors((prev) => ({ ...prev, system: 'Select a System' }))
+        throw new Error('System is required')
       }
 
       // Create assemblies per set (reuse existing ids when editing)
@@ -548,9 +664,16 @@ const ProjectCreationWizard = () => {
               name: assembly.name.trim(),
               type: (assembly.type || 'assembly').toLowerCase(),
               notes: assembly.description || '',
+              // Link parts from registry
+              parts: (assembly.linkedPartIds || []).filter(Boolean),
             }
             const created = await assemblyService.add(payload)
             resolvedId = created?._id || null
+          } else if (assembly.linkedPartIds?.length) {
+            // Update existing assembly with linked parts
+            await assemblyService.update(resolvedId, {
+              parts: assembly.linkedPartIds.filter(Boolean),
+            }).catch(() => {})
           }
           if (resolvedId) {
             ids.push(resolvedId)
@@ -592,8 +715,8 @@ const ProjectCreationWizard = () => {
       const payload = {
         name: projectForm.name.trim(),
         code: projectForm.code.trim(),
-        category: categoryId,
-        type: (projectForm.projectType || '').toLowerCase(),
+        system: projectForm.system,
+        configuration: (projectForm.configuration || '').toLowerCase(),
         shortDescription: projectForm.description,
         sets: sets.map((set) => ({
           _id: set.backendId || undefined,
@@ -648,221 +771,406 @@ const ProjectCreationWizard = () => {
     navigate(`/production/treeview?project=${pid}`)
   }
 
-  const renderBasics = () => (
-    <CRow className="g-3">
-      <CCol md={6}>
-        <CFormInput
-          label="Project name"
-          name="name"
-          placeholder="e.g., Guided Payload Upgrade"
-          value={projectForm.name}
-          onChange={(event) => {
-            setProjectForm({ ...projectForm, name: event.target.value })
-            setErrors({ ...errors, name: '' })
-          }}
-          invalid={!!errors.name}
-          feedbackInvalid={errors.name}
-        />
-      </CCol>
-      <CCol md={6}>
-        <CFormInput
-          label="Project code"
-          name="code"
-          placeholder="PX-400"
-          value={projectForm.code}
-          onChange={(event) => {
-            setProjectForm({ ...projectForm, code: event.target.value })
-            setErrors({ ...errors, code: '' })
-          }}
-          invalid={!!errors.code}
-          feedbackInvalid={errors.code}
-        />
-      </CCol>
-      <CCol md={6}>
-        <div className="position-relative">
-          <CFormInput
-            label="Category"
-            type="text"
-            value={categoryInput}
-            list="category-options"
-            placeholder="Type to search or create"
-            autoComplete="off"
-            onFocus={() => setShowCategorySuggestions(true)}
-            onChange={(event) => handleCategoryInput(event.target.value)}
-            onBlur={() => {
-              ensureCategory()
-              setTimeout(() => setShowCategorySuggestions(false), 120)
-            }}
-            invalid={!!errors.category}
-            feedbackInvalid={errors.category}
-          />
-          <datalist id="category-options">
-            {categories.map((cat) => (
-              <option key={cat._id} value={cat.name || cat.title || ''} />
+  const renderBasics = () => {
+    const allProjects = backendProjects.length ? backendProjects : existingProjects
+    
+    // When a project template is selected, populate the form
+    const handleTemplateSelect = (projectId) => {
+      if (!projectId) {
+        setProjectForm({
+          ...projectForm,
+          selectedProjectTemplate: '',
+          useTemplate: false,
+        })
+        return
+      }
+      
+      const selectedProject = allProjects.find(
+        (p) => (p._id || p.id) === projectId
+      )
+      
+      if (selectedProject) {
+        setProjectForm({
+          selectedProjectTemplate: projectId,
+          name: selectedProject.name || '',
+          code: selectedProject.code || '',
+          system: selectedProject.system || '',
+          configuration: selectedProject.configuration || '',
+          visibility: true,
+          description: selectedProject.shortDescription || selectedProject.description || '',
+          useTemplate: true,
+        })
+        
+        // Also load sets from the template
+        if (selectedProject.sets && selectedProject.sets.length > 0) {
+          const templateSets = selectedProject.sets.map((set, idx) => ({
+            id: `template-set-${idx}`,
+            backendId: set._id || set.id || null,
+            name: set.name || `Set ${idx + 1}`,
+            description: set.description || '',
+            structures: set.structures || [],
+            assemblies: set.assemblies || [],
+          }))
+          setSets(templateSets)
+          setCurrentSetIndex(0)
+        }
+      }
+    }
+    
+    return (
+      <CRow className="g-3">
+        <CCol xs={12}>
+          <CAlert color="info" className="mb-3">
+            <strong>Select a Project Template</strong> from projects defined in the General tab, or create a new one below.
+          </CAlert>
+        </CCol>
+        
+        <CCol md={12}>
+          <CFormSelect
+            label="Select Project Template (from General tab)"
+            value={projectForm.selectedProjectTemplate}
+            onChange={(event) => handleTemplateSelect(event.target.value)}
+          >
+            <option value="">-- Select a defined project template --</option>
+            {allProjects.map((project) => (
+              <option key={project._id || project.id} value={project._id || project.id}>
+                {project.name} ({project.code}) - {project.system} / {project.configuration}
+              </option>
             ))}
-          </datalist>
-          {showCategorySuggestions && (
-            <div
-              className="position-absolute top-100 start-0 w-100 bg-white border rounded shadow-sm mt-1 z-3"
-              style={{
-                maxHeight: '220px',
-                overflowY: 'auto',
-                background: 'var(--cui-body-bg, #fff)',
-                color: 'var(--cui-body-color, #212529)',
-              }}
-            >
-              {filteredCategoryOptions.length > 0 ? (
-                filteredCategoryOptions.map((cat) => {
-                  const label = cat.name || cat.title || ''
-                  return (
-                    <div
-                      key={cat._id}
-                      role="button"
-                      tabIndex={0}
-                      className="w-100"
-                      onMouseDown={(e) => e.preventDefault()}
-                      style={{
-                        background: 'var(--cui-body-bg, #fff)',
-                        color: 'var(--cui-body-color, #212529)',
-                        padding: '0.5rem 0.75rem',
-                        cursor: 'pointer',
-                      }}
-                      onClick={() => {
-                        setCategoryInput(label)
-                        setProjectForm((prev) => ({ ...prev, category: cat._id }))
-                        setErrors((prev) => ({ ...prev, category: '' }))
-                        setShowCategorySuggestions(false)
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          setCategoryInput(label)
-                          setProjectForm((prev) => ({ ...prev, category: cat._id }))
-                          setErrors((prev) => ({ ...prev, category: '' }))
-                          setShowCategorySuggestions(false)
-                        }
-                      }}
-                    >
-                      {label || 'Untitled category'}
-                    </div>
-                  )
+          </CFormSelect>
+          <small className="text-muted d-block mt-1">
+            Projects defined via General tab → Define Project will appear here
+          </small>
+        </CCol>
+        
+        <CCol xs={12}>
+          <hr className="my-3" />
+          <h6 className="mb-3">Or Create New Project</h6>
+        </CCol>
+        
+        <CCol md={6}>
+          <CFormInput
+            label="Project name *"
+            name="name"
+            placeholder="e.g., Guided Payload Upgrade"
+            value={projectForm.name}
+            onChange={(event) => {
+              setProjectForm({ ...projectForm, name: event.target.value, useTemplate: false })
+              setErrors({ ...errors, name: '' })
+            }}
+            invalid={!!errors.name}
+            feedbackInvalid={errors.name}
+            disabled={projectForm.useTemplate}
+          />
+        </CCol>
+        <CCol md={6}>
+          <CFormInput
+            label="Project code *"
+            name="code"
+            placeholder="PX-400"
+            value={projectForm.code}
+            onChange={(event) => {
+              setProjectForm({ ...projectForm, code: event.target.value, useTemplate: false })
+              setErrors({ ...errors, code: '' })
+            }}
+            invalid={!!errors.code}
+            feedbackInvalid={errors.code}
+            disabled={projectForm.useTemplate}
+          />
+        </CCol>
+        <CCol md={6}>
+          <CFormSelect
+            label="System *"
+            name="system"
+            value={projectForm.system}
+            onChange={(event) => {
+              setProjectForm({ ...projectForm, system: event.target.value, useTemplate: false })
+              setErrors({ ...errors, system: '' })
+            }}
+            invalid={!!errors.system}
+            feedbackInvalid={errors.system}
+            disabled={projectForm.useTemplate}
+          >
+            <option value="">Select System</option>
+            <option value="Arial">Arial</option>
+            <option value="Ballistic">Ballistic</option>
+            <option value="Cruise">Cruise</option>
+          </CFormSelect>
+        </CCol>
+        <CCol md={6}>
+          <CFormSelect
+            label="Configuration *"
+            name="configuration"
+            value={projectForm.configuration}
+            onChange={(event) => {
+              setProjectForm({ ...projectForm, configuration: event.target.value, useTemplate: false })
+              setErrors({ ...errors, configuration: '' })
+            }}
+            invalid={!!errors.configuration}
+            feedbackInvalid={errors.configuration}
+            disabled={projectForm.useTemplate}
+          >
+            <option value="">Select Configuration</option>
+            <option value="special">Special</option>
+            <option value="conventional">Conventional</option>
+          </CFormSelect>
+        </CCol>
+        <CCol md={12}>
+          <CFormTextarea
+            label="Short description"
+            name="description"
+            placeholder="What are we building in this project?"
+            value={projectForm.description}
+            onChange={(event) => setProjectForm({ ...projectForm, description: event.target.value, useTemplate: false })}
+            rows={3}
+            disabled={projectForm.useTemplate}
+          />
+        </CCol>
+      </CRow>
+    )
+  }
+
+  const renderSets = () => {
+    const currentSet = sets[currentSetIndex] || null
+    const allProjects = backendProjects.length ? backendProjects : existingProjects
+    
+    return (
+      <CRow className="g-3">
+        {/* Selection Section */}
+        <CCol xs={12}>
+          <CAlert color="info" className="mb-3">
+            <strong>Select Sets</strong> from predefined setups (General tab) or import from existing projects.
+          </CAlert>
+        </CCol>
+        
+        {/* Select from Setups (General tab) */}
+        <CCol xs={12} md={6}>
+          <CFormSelect
+            label="Select Setups (from General tab → Define Setups)"
+            value=""
+            onChange={(event) => {
+              if (!event.target.value) return
+              const setup = localStorageItems.setups.find((s) => s.id === event.target.value)
+              if (setup) {
+                const newSet = {
+                  id: `setup-${Date.now()}`,
+                  backendId: null,
+                  name: setup.name,
+                  description: `Setup: ${setup.name} (ADG: ${setup.adg || 'N/A'}, DDG: ${setup.ddg || 'N/A'})`,
+                  structures: [],
+                  assemblies: [],
+                  source: 'General Tab Setup',
+                }
+                setSets((prev) => {
+                  const updated = [...prev, newSet]
+                  setCurrentSetIndex(updated.length - 1)
+                  return updated
                 })
-              ) : (
+                event.target.value = '' // Reset dropdown
+              }
+            }}
+          >
+            <option value="">-- Select a setup from General tab --</option>
+            {localStorageItems.setups.map((setup) => (
+              <option key={setup.id} value={setup.id}>
+                {setup.name} {setup.adg ? `(ADG: ${setup.adg})` : ''}
+              </option>
+            ))}
+          </CFormSelect>
+          <small className="text-muted d-block mt-1">
+            Setups defined via General tab → Define Setups
+          </small>
+        </CCol>
+        
+        {/* Import from existing project */}
+        <CCol xs={12} md={6}>
+          <CFormSelect
+            label="Import sets from existing project"
+            value={selectedProjectId}
+            onChange={(event) => setSelectedProjectId(event.target.value)}
+          >
+            <option value="">Select project to import sets</option>
+            {allProjects.map((project) => (
+              <option key={project._id || project.id} value={project._id || project.id}>
+                {project.name} ({project.code})
+              </option>
+            ))}
+          </CFormSelect>
+          <CButton color="secondary" variant="outline" className="mt-2" onClick={importSets}>
+            Import selected project sets
+          </CButton>
+        </CCol>
+        
+        {/* Add new set manually */}
+        <CCol xs={12}>
+          <div className="d-flex justify-content-between align-items-center border-top pt-3">
+            <p className="mb-0 text-body-secondary small">Or create a new set manually</p>
+            <CButton color="primary" variant="outline" onClick={addSet}>
+              Add a new set
+            </CButton>
+          </div>
+        </CCol>
+
+        {/* Carousel Section */}
+        {sets.length > 0 ? (
+          <CCol xs={12}>
+            <div className="sets-carousel-container position-relative">
+              {/* Navigation Arrows */}
+              {sets.length > 1 && (
+                <>
+                  <CButton
+                    color="secondary"
+                    variant="outline"
+                    className="carousel-nav-btn carousel-nav-prev"
+                    onClick={prevSet}
+                    disabled={currentSetIndex === 0}
+                    style={{
+                      position: 'absolute',
+                      left: '-15px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      zIndex: 10,
+                      borderRadius: '50%',
+                      width: '40px',
+                      height: '40px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <CIcon icon={cilChevronLeft} />
+                  </CButton>
+                  <CButton
+                    color="secondary"
+                    variant="outline"
+                    className="carousel-nav-btn carousel-nav-next"
+                    onClick={nextSet}
+                    disabled={currentSetIndex === sets.length - 1}
+                    style={{
+                      position: 'absolute',
+                      right: '-15px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      zIndex: 10,
+                      borderRadius: '50%',
+                      width: '40px',
+                      height: '40px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <CIcon icon={cilChevronRight} />
+                  </CButton>
+                </>
+              )}
+
+              {/* Carousel Track */}
+              <div
+                className="sets-carousel-track"
+                style={{
+                  display: 'flex',
+                  overflowX: 'hidden',
+                  scrollBehavior: 'smooth',
+                  position: 'relative',
+                  minHeight: '300px',
+                }}
+              >
+                {sets.map((set, index) => (
+                  <div
+                    key={set.id}
+                    className="sets-carousel-slide"
+                    style={{
+                      minWidth: '100%',
+                      flexShrink: 0,
+                      transform: `translateX(-${currentSetIndex * 100}%)`,
+                      transition: 'transform 0.3s ease-in-out',
+                      padding: '0 10px',
+                    }}
+                  >
+                    <CCard className="h-100 shadow-sm border-start border-4 border-primary">
+                      <CCardBody>
+                        <div className="d-flex justify-content-between align-items-start mb-2">
+                          <div>
+                            <h6 className="mb-1">{set.name}</h6>
+                            <p className="text-body-secondary small mb-0">
+                              Describe the set so teams know when to reuse it.
+                            </p>
+                          </div>
+                          <div className="d-flex flex-column align-items-end gap-2">
+                            <CBadge color="info">Reusable</CBadge>
+                            {sets.length > 1 && (
+                              <CButton
+                                color="danger"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => removeSet(set.id)}
+                              >
+                                Remove set
+                              </CButton>
+                            )}
+                          </div>
+                        </div>
+                        <CFormInput
+                          label="Set name"
+                          value={set.name}
+                          onChange={(event) => updateSetField(set.id, 'name', event.target.value)}
+                          className="mb-3"
+                        />
+                        <CFormTextarea
+                          label="Purpose / description"
+                          value={set.description}
+                          onChange={(event) => updateSetField(set.id, 'description', event.target.value)}
+                          rows={2}
+                        />
+                      </CCardBody>
+                    </CCard>
+                  </div>
+                ))}
+              </div>
+
+              {/* Carousel Indicators */}
+              {sets.length > 1 && (
                 <div
-                  className="text-body-secondary small"
-                  style={{ padding: '0.5rem 0.75rem', background: 'var(--cui-body-bg, #fff)' }}
+                  className="d-flex justify-content-center align-items-center gap-2 mt-3"
+                  style={{ flexWrap: 'wrap' }}
                 >
-                  No categories found
+                  {sets.map((set, index) => (
+                    <button
+                      key={set.id}
+                      type="button"
+                      onClick={() => goToSet(index)}
+                      className={`carousel-indicator ${index === currentSetIndex ? 'active' : ''}`}
+                      style={{
+                        width: '12px',
+                        height: '12px',
+                        borderRadius: '50%',
+                        border: 'none',
+                        backgroundColor: index === currentSetIndex ? '#0d6efd' : '#dee2e6',
+                        cursor: 'pointer',
+                        transition: 'background-color 0.3s ease',
+                        padding: 0,
+                      }}
+                      aria-label={`Go to set ${index + 1}`}
+                    />
+                  ))}
+                  <span className="text-body-secondary small ms-2">
+                    {currentSetIndex + 1} / {sets.length}
+                  </span>
                 </div>
               )}
             </div>
-          )}
-        </div>
-      </CCol>
-      <CCol md={6}>
-        <CFormSelect
-          label="Project type"
-          name="projectType"
-          value={projectForm.projectType}
-          onChange={(event) => {
-            setProjectForm({ ...projectForm, projectType: event.target.value })
-            setErrors({ ...errors, projectType: '' })
-          }}
-          invalid={!!errors.projectType}
-          feedbackInvalid={errors.projectType}
-        >
-          <option value="">Select project type</option>
-          <option value="special">Special</option>
-          <option value="conventional">Conventional</option>
-        </CFormSelect>
-      </CCol>
-      <CCol md={6}>
-        <CFormCheck
-          label="Show this project for reuse and set imports"
-          checked={projectForm.visibility}
-          onChange={(event) => setProjectForm({ ...projectForm, visibility: event.target.checked })}
-        />
-      </CCol>
-      <CCol md={12}>
-        <CFormTextarea
-          label="Short description"
-          name="description"
-          placeholder="What are we building in this project?"
-          value={projectForm.description}
-          onChange={(event) => setProjectForm({ ...projectForm, description: event.target.value })}
-          rows={3}
-        />
-      </CCol>
-    </CRow>
-  )
-
-  const renderSets = () => (
-    <CRow className="g-3">
-      <CCol md={6}>
-        <CFormSelect
-          label="Import sets from existing project"
-          value={selectedProjectId}
-          onChange={(event) => setSelectedProjectId(event.target.value)}
-        >
-          <option value="">Select project</option>
-          {(backendProjects.length ? backendProjects : existingProjects).map((project) => (
-            <option key={project._id || project.id} value={project._id || project.id}>
-              {project.name} ({project.code})
-            </option>
-          ))}
-        </CFormSelect>
-        <CButton color="secondary" variant="outline" className="mt-2" onClick={importSets}>
-          Import selected project sets
-        </CButton>
-      </CCol>
-      <CCol md={6} className="d-flex align-items-end justify-content-md-end">
-        <div className="text-md-end w-100">
-          <p className="mb-2 text-body-secondary small">Start from blank or reuse a template.</p>
-          <CButton color="primary" onClick={addSet}>
-            Add a new set
-          </CButton>
-        </div>
-      </CCol>
-      {sets.map((set) => (
-        <CCol md={6} key={set.id}>
-          <CCard className="h-100 shadow-sm border-start border-4 border-primary">
-            <CCardBody>
-              <div className="d-flex justify-content-between align-items-start mb-2">
-                <div>
-                  <h6 className="mb-1">{set.name}</h6>
-                  <p className="text-body-secondary small mb-0">
-                    Describe the set so teams know when to reuse it.
-                  </p>
-                </div>
-                <div className="d-flex flex-column align-items-end gap-2">
-                  <CBadge color="info">Reusable</CBadge>
-                  <CButton
-                    color="danger"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => removeSet(set.id)}
-                  >
-                    Remove set
-                  </CButton>
-                </div>
-              </div>
-              <CFormInput
-                label="Set name"
-                value={set.name}
-                onChange={(event) => updateSetField(set.id, 'name', event.target.value)}
-                className="mb-3"
-              />
-              <CFormTextarea
-                label="Purpose / description"
-                value={set.description}
-                onChange={(event) => updateSetField(set.id, 'description', event.target.value)}
-                rows={2}
-              />
-            </CCardBody>
-          </CCard>
-        </CCol>
-      ))}
-    </CRow>
-  )
+          </CCol>
+        ) : (
+          <CCol xs={12}>
+            <CAlert color="info" className="text-center">
+              No sets yet. Click "Add a new set" to get started.
+            </CAlert>
+          </CCol>
+        )}
+      </CRow>
+    )
+  }
 
   const renderStructures = () => (
     <CRow className="g-3">
@@ -1066,9 +1374,73 @@ const ProjectCreationWizard = () => {
                                     }
                                   />
                                 </CCol>
+
+                                {/* Parts Linking Section */}
+                                <CCol md={12}>
+                                  <div className="border-top pt-2 mt-2">
+                                    <label className="form-label small fw-semibold text-primary">
+                                      Link Parts from Registry
+                                    </label>
+                                    <CFormSelect
+                                      size="sm"
+                                      value=""
+                                      onChange={(event) => {
+                                        if (event.target.value) {
+                                          linkPartToAssembly(set.id, assembly.id, event.target.value)
+                                        }
+                                      }}
+                                    >
+                                      <option value="">Select a part to link...</option>
+                                      {partsRegistry
+                                        .filter(
+                                          (part) =>
+                                            !(assembly.linkedPartIds || []).includes(
+                                              part._id || part.id,
+                                            ),
+                                        )
+                                        .map((part) => (
+                                          <option key={part._id || part.id} value={part._id || part.id}>
+                                            {part.name} ({part.code}) - {part.partType}
+                                            {part.isQualified ? ' ✓' : ' [NCR]'}
+                                          </option>
+                                        ))}
+                                    </CFormSelect>
+                                    {(assembly.linkedPartIds || []).length > 0 && (
+                                      <div className="mt-2 d-flex flex-wrap gap-1">
+                                        {(assembly.linkedPartIds || []).map((partId) => {
+                                          const part = partsRegistry.find(
+                                            (p) => (p._id || p.id) === partId,
+                                          )
+                                          if (!part) return null
+                                          return (
+                                            <CBadge
+                                              key={partId}
+                                              color={part.isQualified ? 'success' : 'warning'}
+                                              className="d-flex align-items-center gap-1 py-1 px-2"
+                                            >
+                                              <span>
+                                                {part.name} ({part.partType})
+                                              </span>
+                                              <span
+                                                role="button"
+                                                className="ms-1 cursor-pointer"
+                                                onClick={() =>
+                                                  unlinkPartFromAssembly(set.id, assembly.id, partId)
+                                                }
+                                                style={{ cursor: 'pointer' }}
+                                              >
+                                                ×
+                                              </span>
+                                            </CBadge>
+                                          )
+                                        })}
+                                      </div>
+                                    )}
+                                  </div>
+                                </CCol>
                               </CRow>
 
-                              <div className="d-flex justify-content-between align-items-center">
+                              <div className="d-flex justify-content-between align-items-center mt-2">
                                 <small className="text-body-secondary">
                                   Save frequently used assemblies to reuse later.
                                 </small>
@@ -1129,10 +1501,10 @@ const ProjectCreationWizard = () => {
                 <strong>Code:</strong> {projectForm.code || '—'}
               </li>
               <li className="mb-2">
-                <strong>Category:</strong> {projectForm.category || '—'}
+                <strong>System:</strong> {projectForm.system || '—'}
               </li>
               <li className="mb-2">
-                <strong>Project type:</strong> {projectForm.projectType || '—'}
+                <strong>Configuration:</strong> {projectForm.configuration || '—'}
               </li>
               <li className="mb-2">
                 <strong>Visible for reuse:</strong> {projectForm.visibility ? 'Yes' : 'Hidden'}
@@ -1411,12 +1783,66 @@ const ProjectCreationWizard = () => {
           .assembly-card {
             flex: 0 0 320px;
           }
+          .sets-carousel-container {
+            position: relative;
+            padding: 0 50px;
+            overflow: hidden;
+          }
+          .sets-carousel-track {
+            display: flex;
+            overflow: hidden;
+            scroll-behavior: smooth;
+            position: relative;
+            min-height: 300px;
+          }
+          .sets-carousel-slide {
+            min-width: 100%;
+            flex-shrink: 0;
+            transition: transform 0.3s ease-in-out;
+            padding: 0 10px;
+          }
+          .carousel-nav-btn {
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+          }
+          .carousel-nav-btn:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+          }
+          .carousel-indicator {
+            transition: background-color 0.3s ease, transform 0.2s ease;
+          }
+          .carousel-indicator:hover {
+            transform: scale(1.2);
+          }
+          .carousel-indicator.active {
+            transform: scale(1.3);
+          }
           @media (max-width: 767.98px) {
             .wizard-step {
               min-height: auto;
             }
             .assembly-card {
               flex-basis: 260px;
+            }
+            .sets-carousel-container {
+              padding: 0 40px;
+            }
+            .carousel-nav-btn {
+              width: 35px;
+              height: 35px;
+            }
+            .carousel-nav-prev {
+              left: -10px !important;
+            }
+            .carousel-nav-next {
+              right: -10px !important;
             }
           }
         `}

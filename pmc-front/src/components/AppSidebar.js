@@ -31,6 +31,8 @@ import {
   cilChart,
   cilLockLocked,
   cilMenu,
+  cilChevronLeft,
+  cilChevronRight,
 } from '@coreui/icons'
 import { useSelector, useDispatch } from 'react-redux'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -89,24 +91,34 @@ const AppSidebar = () => {
         module: 'production',
         children: [
           { label: 'Project Tree', to: '/production/treeview', icon: cilSettings },
+          { label: 'Build Tree', to: '/production/build-tree', icon: cilSettings },
+          { label: 'Parts Registry', to: '/production/parts-registry', icon: cilLayers },
           { label: 'Project Review', to: '/production/project-summary', icon: cilChart },
           { label: 'All Project Status', to: '/production/all-project-status', icon: cilChart },
           { label: 'Timeline & Discussions', to: '/production/timeline', icon: cilClock },
-          { label: 'Production Review', to: '/production/production-review', icon: cilClipboard },
           {
-            label: 'Add Meeting',
-            to: '/production/production-review?action=add-meeting',
+            label: 'Production Review',
             icon: cilClipboard,
-          },
-          {
-            label: 'Update Meeting',
-            to: '/production/production-review?action=update-meeting',
-            icon: cilClipboard,
-          },
-          {
-            label: 'Add Discussion Point',
-            to: '/production/production-review?action=add-discussion',
-            icon: cilClipboard,
+            children: [
+              {
+                label: 'Add Meeting',
+                to: '/dashboard',
+                action: 'production-review-add-meeting',
+                icon: cilClipboard,
+              },
+              {
+                label: 'Update Meeting',
+                to: '/dashboard',
+                action: 'production-review-update-meeting',
+                icon: cilClipboard,
+              },
+              {
+                label: 'Add Discussion Point',
+                to: '/dashboard',
+                action: 'production-review-add-discussion',
+                icon: cilClipboard,
+              },
+            ],
           },
           { label: 'View Assemblies', to: '/production/view-assembly', icon: cilLayers },
           { label: 'View Issues', to: '/production/view-issues', icon: cilWarning },
@@ -141,6 +153,20 @@ const AppSidebar = () => {
           { label: 'Expenses', to: '/financial/expenses', icon: cilMoney },
         ],
       },
+        {
+          id: 'general',
+          label: 'General',
+          icon: cilFolderOpen,
+          module: 'dashboard',
+          children: [
+            { label: 'Define Project', to: '/dashboard', action: 'define-project', icon: cilSettings },
+            { label: 'Define Setups', to: '/dashboard', action: 'define-setups', icon: cilSettings },
+            { label: 'Define Part Category', to: '/dashboard', action: 'define-part-category', icon: cilSettings },
+            { label: 'Define Part Types', to: '/dashboard', action: 'define-part-types', icon: cilSettings },
+            { label: 'Define QC Test', to: '/dashboard', action: 'define-qc-test', icon: cilSettings },
+            { label: 'Define Part', to: '/dashboard', action: 'define-part', icon: cilSettings },
+          ],
+        },
       {
         id: 'operations',
         label: 'Operations',
@@ -178,7 +204,13 @@ const AppSidebar = () => {
     if (item.module) {
       dispatch({ type: 'set', activeModule: item.module })
     }
-    if (item.to) {
+    if (item.action) {
+      // For modal actions, navigate with action parameter
+      navigate(`${item.to}?action=${item.action}`)
+      if (isMobile) {
+        dispatch({ type: 'set', sidebarShow: false })
+      }
+    } else if (item.to) {
       navigate(item.to)
       if (isMobile) {
         dispatch({ type: 'set', sidebarShow: false })
@@ -270,19 +302,43 @@ const AppSidebar = () => {
                   role="group"
                   aria-label={`${item.label} links`}
                 >
-                  {item.children.map((child) => (
-                    <button
-                      key={child.to}
-                      type="button"
-                      className={`app-sidebar__child-btn ${
-                        isRouteActive(child.to) ? 'is-active' : ''
-                      }`}
-                      onClick={() => handleNavClick({ ...child, module: item.module })}
-                    >
-                      <CIcon icon={child.icon} className="me-2 text-body-secondary" />
-                      <span>{child.label}</span>
-                    </button>
-                  ))}
+                  {item.children.map((child, childIdx) => {
+                    // Check if this child has nested children (like Production Review)
+                    if (child.children) {
+                      return (
+                        <div key={`${child.label}-${childIdx}`} className="app-sidebar__nested-group">
+                          <div className="app-sidebar__nested-label text-body-secondary small ps-3 py-1">
+                            <CIcon icon={child.icon} className="me-2" />
+                            {child.label}
+                          </div>
+                          {child.children.map((nestedChild, nestedIdx) => (
+                            <button
+                              key={`${nestedChild.label}-${nestedIdx}`}
+                              type="button"
+                              className="app-sidebar__child-btn ps-4"
+                              onClick={() => handleNavClick({ ...nestedChild, module: item.module })}
+                            >
+                              <CIcon icon={nestedChild.icon} className="me-2 text-body-secondary" />
+                              <span>{nestedChild.label}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )
+                    }
+                    return (
+                      <button
+                        key={`${child.label}-${childIdx}`}
+                        type="button"
+                        className={`app-sidebar__child-btn ${
+                          child.to && isRouteActive(child.to) ? 'is-active' : ''
+                        }`}
+                        onClick={() => handleNavClick({ ...child, module: item.module })}
+                      >
+                        <CIcon icon={child.icon} className="me-2 text-body-secondary" />
+                        <span>{child.label}</span>
+                      </button>
+                    )
+                  })}
                 </div>
               )}
             </div>
@@ -409,29 +465,30 @@ const AppSidebar = () => {
       onVisibleChange={(visible) => dispatch({ type: 'set', sidebarShow: visible })}
       className="bg-dark text-white border-end app-sidebar"
     >
-      <CSidebarHeader className="app-sidebar__brand px-4 py-4 d-flex align-items-start gap-3">
-        <div>
-          <div className="text-uppercase small text-warning">PMC Production Manager</div>
-          <div className="fw-bold text-light">Strategic Programs Command</div>
-          <div className="text-body-secondary small">Classified Access</div>
-        </div>
+      <CSidebarHeader className="app-sidebar__brand px-3 py-3 d-flex align-items-center justify-content-between">
+        <div className="fw-bold text-warning fs-4">PMC</div>
         <button
           type="button"
-          className="btn btn-outline-light btn-sm ms-auto d-lg-none"
-          onClick={() => dispatch({ type: 'set', sidebarShow: !sidebarShow })}
+          className="btn btn-outline-warning btn-sm"
+          onClick={() => {
+            if (window.innerWidth < 992) {
+              dispatch({ type: 'set', sidebarShow: !sidebarShow })
+            } else {
+              dispatch({ type: 'set', sidebarUnfoldable: !unfoldable })
+            }
+          }}
+          title={unfoldable ? 'Expand sidebar' : 'Collapse sidebar'}
         >
-          <CIcon icon={cilMenu} />
+          <CIcon icon={unfoldable ? cilChevronRight : cilChevronLeft} />
         </button>
       </CSidebarHeader>
 
       <CSidebarNav className="app-sidebar__nav">{renderMissionNavigation()}</CSidebarNav>
 
-      <div className="app-sidebar__user px-4 py-4">
-        <div className="fw-semibold text-light">{userName}</div>
-        <div className="small text-body-secondary mb-3">{userRole || 'Operator'}</div>
+      <div className="app-sidebar__user px-3 py-3">
         <CButton color="danger" variant="outline" className="w-100" onClick={handleLogout}>
           <CIcon icon={cilLockLocked} className="me-2" />
-          Secure Logout
+          Logout
         </CButton>
       </div>
     </CSidebar>

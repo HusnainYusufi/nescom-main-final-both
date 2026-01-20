@@ -1,21 +1,23 @@
 const ProjectRepo = require('../repository/project.repository');
-const ProjectCategoryService = require('../../projectCategory/services/ProjectCategoryService');
 const AssemblyService = require('../../assembly/services/AssemblyService');
 const StructureService = require('../../structure/services/StructureService');
 
 class ProjectService {
   static async addProject(data) {
     try {
-      const { code, category, sets = [], structures = [] } = data;
+      const { code, system, configuration, sets = [], structures = [] } = data;
 
       const existingProject = await ProjectRepo.getByCode(code);
       if (existingProject) {
         return { status: 400, message: 'Project code already exists', result: null };
       }
 
-      const categoryRecord = await ProjectCategoryService.getCategoryById(category);
-      if (!categoryRecord) {
-        return { status: 400, message: 'Invalid project category', result: null };
+      if (!system || !['Arial', 'Ballistic', 'Cruise'].includes(system)) {
+        return { status: 400, message: 'Invalid system. Must be Arial, Ballistic, or Cruise', result: null };
+      }
+
+      if (!configuration || !['special', 'conventional'].includes(configuration)) {
+        return { status: 400, message: 'Invalid configuration. Must be special or conventional', result: null };
       }
 
       let assembliesToValidate = [];
@@ -93,7 +95,7 @@ class ProjectService {
         return { status: 404, message: 'Project not found', result: null };
       }
 
-      const { code, category, sets = [], structures = [] } = data;
+      const { code, system, configuration, sets = [], structures = [] } = data;
 
       if (code && code !== existing.code) {
         const duplicate = await ProjectRepo.getByCode(code);
@@ -102,11 +104,12 @@ class ProjectService {
         }
       }
 
-      if (category) {
-        const categoryRecord = await ProjectCategoryService.getCategoryById(category);
-        if (!categoryRecord) {
-          return { status: 400, message: 'Invalid project category', result: null };
-        }
+      if (system && !['Arial', 'Ballistic', 'Cruise'].includes(system)) {
+        return { status: 400, message: 'Invalid system. Must be Arial, Ballistic, or Cruise', result: null };
+      }
+
+      if (configuration && !['special', 'conventional'].includes(configuration)) {
+        return { status: 400, message: 'Invalid configuration. Must be special or conventional', result: null };
       }
 
       let assembliesToValidate = [];

@@ -14,8 +14,8 @@ const ProjectSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true },
     code: { type: String, required: true, unique: true, trim: true },
-    category: { type: mongoose.Schema.Types.ObjectId, ref: 'ProjectCategory', required: true },
-    type: { type: String, enum: ['special', 'conventional'], required: true },
+    system: { type: String, enum: ['Arial', 'Ballistic', 'Cruise'], required: true },
+    configuration: { type: String, enum: ['special', 'conventional'], required: true },
     status: { type: String, default: 'Draft', trim: true },
     shortDescription: { type: String },
     sets: [SetSchema],

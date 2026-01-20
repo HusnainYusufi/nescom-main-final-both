@@ -276,7 +276,7 @@ const ProductionReview = () => {
                 <option value="">Select Meeting</option>
                 {meetings.map((meeting) => (
                   <option key={meeting._id || meeting.id} value={meeting._id || meeting.id}>
-                    {meeting.meetingNo} • {meeting.meetingType} • {formatDate(meeting.meetingDate)}
+                    {meeting.meetingNo || 'N/A'} • {meeting.meetingType || 'N/A'} • {formatDate(meeting.meetingDate)}
                   </option>
                 ))}
               </CFormSelect>
@@ -355,7 +355,7 @@ const ProductionReview = () => {
                 <option value="">Select PRM</option>
                 {prmMeetings.map((meeting) => (
                   <option key={meeting._id || meeting.id} value={meeting._id || meeting.id}>
-                    {meeting.meetingNo} • {formatDate(meeting.meetingDate)}
+                    {meeting.meetingNo || 'N/A'} • {formatDate(meeting.meetingDate)}
                   </option>
                 ))}
               </CFormSelect>

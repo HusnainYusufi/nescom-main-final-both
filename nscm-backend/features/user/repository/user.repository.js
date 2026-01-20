@@ -6,7 +6,8 @@ class UserRepository {
     }
 
     static async getByEmail(email) {
-        return await User.findOne({ email }).exec();
+        // Email is stored in lowercase, so convert query to lowercase
+        return await User.findOne({ email: email?.toLowerCase() }).exec();
     }
 
     static async getByUsername(username) {

@@ -38,6 +38,51 @@ class AssemblyService {
     }
   }
 
+  static async getAssemblyById(id) {
+    try {
+      if (!id) {
+        return { status: 400, message: 'Assembly ID is required', result: null };
+      }
+      const assembly = await AssemblyRepo.findById(id);
+      if (!assembly) {
+        return { status: 404, message: 'Assembly not found', result: null };
+      }
+      return { status: 200, message: 'Record Found', result: assembly };
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  static async updateAssembly(id, data) {
+    try {
+      if (!id) {
+        return { status: 400, message: 'Assembly ID is required', result: null };
+      }
+      const updated = await AssemblyRepo.updateById(id, data);
+      if (!updated) {
+        return { status: 404, message: 'Assembly not found', result: null };
+      }
+      return { status: 200, message: 'Updated', result: updated };
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  static async deleteAssembly(id) {
+    try {
+      if (!id) {
+        return { status: 400, message: 'Assembly ID is required', result: null };
+      }
+      const deleted = await AssemblyRepo.deleteById(id);
+      if (!deleted) {
+        return { status: 404, message: 'Assembly not found', result: null };
+      }
+      return { status: 200, message: 'Deleted', result: deleted };
+    } catch (error) {
+      throw error;
+    }
+  }
+
   static async findAssembliesByIds(ids) {
     try {
       return await AssemblyRepo.findByIds(ids);
